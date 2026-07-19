@@ -49,6 +49,8 @@ if (Array.isArray(file)) {
     });
 }
 
+console.log("Cloud Name:", process.env.CLOUDINARY_CLOUD_NAME);
+console.log("API Key:", process.env.CLOUDINARY_API_KEY);
       const hasil = await cloudinary.uploader.upload(file.filepath,{
         folder:"smkn1mepanga",
         resource_type:"image"
