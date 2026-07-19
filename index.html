@@ -11333,7 +11333,7 @@ console.log("=== prosesKompresiFotoModal dipanggil ===");
             ctx.drawImage(img,0,0,width,height);
 
 canvas.toBlob(async function(blob){
-
+console.log("Blob dibuat");
     // ===== PREVIEW FOTO =====
     const preview = document.getElementById("previewFotoSiswa");
 
@@ -11344,7 +11344,7 @@ canvas.toBlob(async function(blob){
 
     const formData = new FormData();
     formData.append("file", blob, "foto.jpg");
-
+console.log("FormData siap");
     try{
 
         showToast("Mengupload foto...", "info");
