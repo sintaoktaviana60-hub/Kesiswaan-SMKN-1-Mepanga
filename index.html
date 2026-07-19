@@ -11171,7 +11171,7 @@ function renderInputDataPelajar() {
               ${dataSiswaTampil.length === 0 ? `<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">Belum ada data siswa.</td></tr>` : ''}
               ${dataSiswaTampil.map(s => {
                 // Mengecek ketersediaan data foto baik dari DB utama atau kelengkapanData cache
-                const kData = DB.kelengkapanData ? DB.kelengkapanData[s.id] : null;
+                const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(s.id));
                 const adaFoto = !!(kData && kData.foto);
                 const badgeFoto = adaFoto 
                   ? '<span class="text-blue-600 font-medium text-xs">✔ Tersedia</span>' 
@@ -11389,7 +11389,6 @@ console.log("Response:", hasil);
 
 
 // Fungsi simpan identitas siswa versi tampilan lama yang disinkronkan ke Firebase
-// Fungsi simpan identitas siswa versi perbaikan untuk sinkronisasi Firebase
 function simpanIdentitasSiswa() {
   const siswaId = document.getElementById('mdlSiswaId').value;
   if (!siswaId) {
@@ -11402,9 +11401,9 @@ function simpanIdentitasSiswa() {
   const alamat = document.getElementById('mdlAlamat').value.trim();
   const foto = document.getElementById("mdlBase64Foto").value;
 
-  // Pastikan inisialisasi awal database lokal berbentuk Objek, bukan Array
-  if (!DB.kelengkapanData || Array.isArray(DB.kelengkapanData)) {
-    DB.kelengkapanData = {};
+  // PASTIKAN tetap berupa Array
+  if (!DB.kelengkapanData || !Array.isArray(DB.kelengkapanData)) {
+    DB.kelengkapanData = [];
   }
   
   const payloadData = {
@@ -11416,22 +11415,26 @@ function simpanIdentitasSiswa() {
     updatedAt: new Date().toISOString()
   };
 
-  // 1. Perbarui Cache lokal dengan format key berbasis siswaId
-  DB.kelengkapanData[siswaId] = payloadData;
+  // Cari index di array lokal
+  const indexData = DB.kelengkapanData.findIndex(d => String(d.siswaId) === String(siswaId));
+  
+  if (indexData > -1) {
+    DB.kelengkapanData[indexData] = payloadData;
+  } else {
+    DB.kelengkapanData.push(payloadData);
+  }
 
   showToast('Sedang menyinkronkan data...', 'info');
 
-  // 2. Tembak ke Node Firebase yang tepat
-  const dbRef = firebase.database().ref('kesiswaan_cloud/kelengkapanData/' + siswaId); 
+  // SIMPAN KE FIREBASE SEBAGAI ARRAY/LIST (Gunakan struktur array utuh)
+  // Ini akan memperbarui seluruh node kelengkapanData sebagai array di Firebase
+  const dbRef = firebase.database().ref('kesiswaan_cloud/kelengkapanData'); 
   
-  dbRef.update(payloadData)
+  dbRef.set(DB.kelengkapanData)
     .then(() => {
       showToast('Data Tersimpan ke Firebase!', 'success');
       tutupModalIdentitas();
-      
-      // 3. Paksa render ulang agar foto langsung terbaca di UI
       renderInputDataPelajar(); 
-      
       if (typeof addAuditLog === 'function') {
         addAuditLog('Update Identitas Siswa ID: ' + siswaId);
       }
@@ -12455,10 +12458,17 @@ daftarSiswa.forEach((siswa, index) => {
     else if (kls.includes('X'))   tahunLulus += 3;
     else                          tahunLulus += 3;
 
-    const fotoSiswa = siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto";
-    const alamat = siswa.alamat || '-';
-    const tglLahirTerformat = formatTanggalLahirIndonesia(siswa.tanggalLahir);
-    const ttl = (siswa.tempatLahir || '-') + ', ' + tglLahirTerformat;
+    // HUBUNGKAN DENGAN DB.kelengkapanData ARRAY
+    const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(siswa.id));
+
+    // Ambil foto dari kelengkapanData terlebih dahulu, jika kosong baru cek objek siswa utama
+    const fotoSiswa = kData && kData.foto ? kData.foto : (siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto");
+    
+    // Ambil alamat dan TTL dari kelengkapanData jika tersedia
+    const alamat = kData && kData.alamat ? kData.alamat : (siswa.alamat || '-');
+    const tglLahirTerformat = formatTanggalLahirIndonesia(kData && kData.tanggalLahir ? kData.tanggalLahir : siswa.tanggalLahir);
+    const tempatLahir = kData && kData.tempatLahir ? kData.tempatLahir : (siswa.tempatLahir || '-');
+    const ttl = tempatLahir + ', ' + tglLahirTerformat;
     
     win.document.write(`
   <div class="baris-kartu">
