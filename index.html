@@ -11348,14 +11348,14 @@ canvas.toBlob(async function(blob){
     try{
 
         showToast("Mengupload foto...", "info");
-
+console.log("Mulai upload ke Cloudinary...");
         const response = await fetch("/api/upload",{
             method:"POST",
             body:formData
         });
-
+console.log("Status Response:", response.status);
         const hasil = await response.json();
-
+console.log("Response:", hasil);
         if(hasil.success){
 
             document.getElementById("mdlBase64Foto").value = hasil.url;
@@ -11377,13 +11377,13 @@ canvas.toBlob(async function(blob){
     }
 
 },"image/jpeg",0.8);
+        };
 
         img.src = e.target.result;
 
     };
 
     reader.readAsDataURL(file);
-  }
 };
 
 
