@@ -11637,7 +11637,6 @@ function renderCetakKartuPelajar() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
 
-  // Ambil daftar kelas unik secara otomatis dari data siswa untuk isi dropdown filter
   const semuaKelasUnique = [...new Set((DB.siswa || []).map(s => s.kelas).filter(Boolean))].sort();
 
   mc.innerHTML = `
@@ -11672,8 +11671,18 @@ function renderCetakKartuPelajar() {
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
               ${(DB.siswa || []).map(s => {
-                const fotoSiswa = s.pasFoto || s.foto;
-                const isReady = (fotoSiswa && s.tempatLahir && s.tanggalLahir && s.alamat);
+                // 1. CARI DATA DI DB.kelengkapanData YANG COCOK DENGAN ID SISWA INI
+                const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(s.id));
+                
+                // 2. AMBIL VARIABEL DENGAN PRIORITAS KELENGKAPAN DATA TERLEBIH DAHULU
+                const fotoSiswa = kData && kData.foto ? kData.foto : (s.pasFoto || s.foto);
+                const tptLahir = kData && kData.tempatLahir ? kData.tempatLahir : s.tempatLahir;
+                const tglLahir = kData && kData.tanggalLahir ? kData.tanggalLahir : s.tanggalLahir;
+                const alamatSiswa = kData && kData.alamat ? kData.alamat : s.alamat;
+
+                // 3. LOGIKA VALIDASI BARU
+                const isReady = !!(fotoSiswa && tptLahir && tglLahir && alamatSiswa);
+                
                 return `
                   <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td class="p-3 font-medium text-gray-900 dark:text-white">${s.nama}</td>
@@ -11704,346 +11713,525 @@ function aksiBukaJendelaCetak(siswaId) {
   const siswa = DB.siswa.find(s => String(s.id) === String(siswaId));
   if (!siswa) return;
 
-  // Aturan Berlaku Hingga otomatis berdasarkan Tingkat Kelas X/XI/XII
+  // 1. Hubungkan dengan DB.kelengkapanData Array
+  const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(siswa.id));
+
+  // 2. Ambil Aturan Berlaku Hingga otomatis berdasarkan Tingkat Kelas
   const kls = (siswa.kelas || '').toUpperCase();
   const tahunSekarang = new Date().getFullYear();
   let tahunLulus = tahunSekarang;
-  
   if (kls.includes('XII'))      tahunLulus += 1;
   else if (kls.includes('XI'))  tahunLulus += 2;
   else if (kls.includes('X'))   tahunLulus += 3;
-  else                          tahunLulus += 3; // Default fallback
+  else                          tahunLulus += 3;
 
-  // Ambil Konfigurasi dari Data Identitas
+  // 3. Ambil Konfigurasi dari Data Identitas Global
   const namaKepsek = DB.identitas?.kepsek || "Nama Kepala Sekolah, M.Pd.";
   const nipKepsek = DB.identitas?.nipKepsek || "NIP. 198203112009031002";
   const logoProvinsiBase64 = DB.identitas?.logoProvinsi || "https://via.placeholder.com/100?text=PROV"; 
   const logoSekolahBase64 = DB.identitas?.logoSekolah || "https://via.placeholder.com/100?text=LOGO"; 
   const capStempelBase64 = DB.identitas?.capSekolah || ""; 
   const ttdKepsekBase64 = DB.identitas?.ttdKepsek || ""; 
-  
-  const fotoSiswa = siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto";
-  const alamat = siswa.alamat || '-';
 
-  // =========================================================================
-  // 🔥 FUNGSI OTOMATIS MENGUBAH FORMAT TANGGAL YYYY-MM-DD -> DD NAMA_BULAN YYYY
-  // =========================================================================
+  // 4. Fallback Data dari kelengkapanData atau Objek Siswa Utama
+  const fotoSiswa = kData && kData.foto ? kData.foto : (siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto");
+  const alamat = kData && kData.alamat ? kData.alamat : (siswa.alamat || '-');
+  
+  // Fungsi pembantu format tanggal lahir Indonesia (DD Nama_Bulan YYYY)
   const formatTanggalLahirIndonesia = (tglStr) => {
     if (!tglStr || tglStr === '-') return '-';
-    
-    // Memisahkan string tanggal berdasarkan tanda hubung "-"
     const parts = tglStr.split('-');
-    
-    // Memastikan formatnya adalah YYYY-MM-DD (3 bagian dan bagian pertama panjangnya 4 angka)
     if (parts.length === 3 && parts[0].length === 4) {
       const tahun = parts[0];
       const bulan = parts[1];
-      const tanggal = parseInt(parts[2], 10); // Mengubah "05" menjadi 5
-
-      // Array nama bulan standar Indonesia
+      const tanggal = parseInt(parts[2], 10);
       const namaBulan = [
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
       ];
-      
       const idxBulan = parseInt(bulan, 10) - 1;
-      if (idxBulan >= 0 && idxBulan < 12) {
-        return `${tanggal} ${namaBulan[idxBulan]} ${tahun}`; // Hasil: 14 Mei 2008
-      }
+      if (idxBulan >= 0 && idxBulan < 12) return `${tanggal} ${namaBulan[idxBulan]} ${tahun}`;
     }
-    
-    return tglStr; // Kembalikan data asli jika format sejak awal bukan YYYY-MM-DD
+    return tglStr;
   };
 
-  // Terapkan fungsi format tanggal lahir Indonesia ke variabel TTL
-  const tglLahirTerformat = formatTanggalLahirIndonesia(siswa.tanggalLahir);
-  const ttl = (siswa.tempatLahir || '-') + ', ' + tglLahirTerformat;
+  const tglLahirTerformat = formatTanggalLahirIndonesia(kData && kData.tanggalLahir ? kData.tanggalLahir : siswa.tanggalLahir);
+  const tempatLahir = kData && kData.tempatLahir ? kData.tempatLahir : (siswa.tempatLahir || '-');
+  const ttl = tempatLahir + ', ' + tglLahirTerformat;
 
-  // Membuat Tab Baru Khusus Print dengan KOP Biru Tua & Badan Biru Gradasi Ringan (Cap Terlihat Jelas)
+  // 5. Mulai membuat dokumen cetak tunggal di tab baru
   const win = window.open('', '_blank');
-win.document.write(`
-  <!DOCTYPE html>
-  <html>
-  <head>
+  
+  win.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
     <title>Cetak_Kartu_${siswa.nama}</title>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap');
-      
-      * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', Helvetica, Arial, sans-serif; }
-      body { background: #f1f5f9; margin: 0; padding: 40px; display: flex; flex-direction: column; gap: 25px; align-items: center; justify-content: center; }
-      
-      /* Ukuran Internasional CR-80 (Presisi KTP/ID Card) */
-      .kartu-id {
-        width: 85.6mm;
-        height: 53.98mm;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 10px 25px -5px rgba(30, 64, 175, 0.15);
-        page-break-inside: avoid;
-      }
-      
-      /* --- TAMPILAN DEPAN NEW DESIGN --- */
-      .kop-sekolah {
-        background: #ffffff;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 12.5mm;
-        position: relative;
-        z-index: 2;
-      }
-      .kop-sekolah img { width: 7.5mm; height: 7.5mm; object-fit: contain; }
-      .kop-text { flex: 1; text-align: center; padding: 0 4px; }
-      .kop-text h3 { margin: 0; font-size: 4.8pt; font-weight: 800; color: #1e293b; text-transform: uppercase; }
-      .kop-text h4 { margin: 0; font-size: 4.2pt; font-weight: 700; color: #475569; text-transform: uppercase; }
-      .kop-text h2 { margin: 0px 0; font-size: 7.8pt; font-weight: 900; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.3px; }
-      .kop-text p { margin: 0; font-size: 3.5pt; color: #64748b; font-weight: 500; }
-      
-      /* Label Pembatas / Banner Tengah */
-      .banner-title {
-        background: linear-gradient(to right, #0ea5e9, #2563eb);
-        text-align: center;
-        padding: 2.5px 0;
-        position: relative;
-        z-index: 2;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-      }
-      .banner-title span {
-        font-size: 6.8pt;
-        font-weight: 900;
-        color: #ffffff;
-        letter-spacing: 1.5px;
-      }
-      .banner-title span em {
-        font-style: normal;
-        font-weight: 400;
-        color: #e0f2fe;
-        font-size: 5.8pt;
-      }
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-      .area-konten { 
-        display: flex; 
-        padding: 6px 8px 4px 8px; 
-        gap: 8px; 
-        height: calc(53.98mm - 16mm); 
-        position: relative; 
-        background: linear-gradient(to bottom, #ffffff 75%, #f0f9ff 100%);
-        align-items: flex-start;
-      }
-      
-      /* Latar Belakang Aksen Transparan */
-      .area-konten::before {
-        content: ""; position: absolute; top: -16mm; left: 0; right: 0; height: 20mm;
-        background: linear-gradient(to right, #22d3ee, #0ea5e9); opacity: 0.08; z-index: 1;
-      }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Plus Jakarta Sans',sans-serif;
+}
 
-      /* Frame Foto Kiri Bawah Semakin Mulus */
-      .foto-container { width: 17.5mm; height: 23.5mm; flex-shrink: 0; z-index: 2; }
-      .foto-frame { 
-        width: 100%; 
-        height: 100%; 
-        border-radius: 4px; 
-        object-fit: cover; 
-        background: #f8fafc; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.12); 
-        border: 1px solid #ffffff;
-      }
-      
-      /* Kontainer Kanan (Tabel Data & Barcode/TTD) */
-      .kanan-container {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        height: 23.5mm;
-        z-index: 2;
-      }
+body{
+    background:#edf4fb;
+    padding:40px 20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:20px;
+}
 
-      .tabel-data { font-size: 6.2pt; width: 100%; border-collapse: collapse; color: #334155; line-height: 1.2; }
-      .tabel-data td { vertical-align: top; padding-bottom: 1.5px; }
-      .tabel-data .lbl { width: 12mm; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2px; font-size: 5.5pt; }
-      .tabel-data .strip { width: 3px; color: #0ea5e9; font-weight: 800; }
-      .tabel-data .val { font-weight: 700; color: #334155; }
-      
-      /* Baris Bawah: Barcode & TTD Sejajar Horisontal */
-      .bawah-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        padding-top: 3px;
-        border-top: 1px dashed rgba(203, 213, 225, 0.7);
-      }
+/* Mengubah container cetak menjadi posisi kolom atas bawah */
+.container-cetak-tunggal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6mm; /* Jarak vertikal antara kartu depan dan belakang */
+}
 
-      .barcode-box {
-        background: #ffffff;
-        padding: 1.5px;
-        border: 0.8px solid #cbd5e1;
-        border-radius: 2px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .barcode-box img { height: 4.5mm; width: 22mm; object-fit: contain; }
+/*=========================================================
+KARTU (UKURAN TEPAT SAMA DENGAN FORMAT MASSAL)
+=========================================================*/
+.kartu-id{
+    width:87.60mm;  
+    height:55.98mm; 
+    position:relative;
+    overflow:hidden;
+    border-radius:7px;
+    background: linear-gradient(135deg,#eaf8ff 0%,#d6efff 20%,#7ec8ff 55%,#1d73d6 100%);
+    border:1px solid #2b6cb0;
+    box-shadow: 0 10px 25px rgba(0,0,0,.18);
+    flex-shrink: 0;
+    page-break-inside:avoid;
+}
 
-      .area-ttd-kepsek { 
-        text-align: right; 
-        position: relative; 
-        width: 25mm; 
-        line-height: 1.1; 
-        font-size: 4.8pt; 
-        color: #475569; 
-      }
-      
-      .wrapper-ttd { 
-        height: 6mm; 
-        position: relative; 
-        margin: 1px 0;
-      }
-      .img-ttd { position: absolute; right: 2px; top: -1px; max-height: 6.5mm; z-index: 5; }
-      .img-cap { position: absolute; right: 7px; top: -2.5px; max-height: 8.5mm; opacity: 0.85; z-index: 4; mix-blend-mode: multiply; }
+/*=========================================================
+BACKGROUND ORNAMEN
+=========================================================*/
+.bg-strip1{
+    position:absolute;
+    width:130%;
+    height:18px;
+    background:rgba(255,255,255,.20);
+    top:8px;
+    left:-40px;
+    transform:rotate(-18deg);
+}
+.bg-strip2{
+    position:absolute;
+    width:130%;
+    height:26px;
+    background:rgba(255,255,255,.10);
+    top:25px;
+    left:-30px;
+    transform:rotate(-18deg);
+}
+.bg-strip3{
+    position:absolute;
+    width:130%;
+    height:16px;
+    background:rgba(255,255,255,.14);
+    top:46px;
+    left:-20px;
+    transform:rotate(-18deg);
+}
+.bg-circle1{
+    position:absolute;
+    width:180px;
+    height:180px;
+    right:-85px;
+    top:-70px;
+    border-radius:50%;
+    background:rgba(255,255,255,.14);
+}
+.bg-circle2{
+    position:absolute;
+    width:120px;
+    height:120px;
+    right:8px;
+    bottom:-45px;
+    border-radius:50%;
+    border:4px solid rgba(255,255,255,.15);
+}
 
-      .dekorasi-bawah {
-        position: absolute; bottom: 0; left: 0; right: 0; height: 1.2mm;
-        background: linear-gradient(to right, #22d3ee, #2563eb); z-index: 2;
-      }
+/*=========================================================
+HEADER / KOP SEKOLAH
+=========================================================*/
+.kop-sekolah{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:white;
+    padding:5px 7px;
+    height:15.5mm;
+    clip-path:polygon(0 0,100% 0,100% 88%,0 100%);
+    z-index:20;
+}
+.kop-sekolah img{
+    width:9.5mm;
+    height:9.5mm;
+    object-fit:contain;
+}
+.kop-text{
+    flex:1;
+    text-align:center;
+    padding:0 3px;
+}
+.kop-text h3{
+    font-size:5.2pt;
+    font-weight:800;
+    color:#1e293b;
+}
+.kop-text h4{
+    font-size:5.2pt;
+    font-weight:700;
+    color:#334155;
+}
+.kop-text h2{
+    font-size:11.5pt;
+    font-weight:900;
+    letter-spacing:.5px;
+    color:#0f172a;
+}
+.kop-text p{
+    font-size:4.2pt;
+    color:#475569;
+}
 
-      /* --- TAMPILAN BELAKANG --- */
-      .bg-belakang {
-        background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
-        color: white;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-      .header-tatatertib { background: rgba(255, 255, 255, 0.08); text-align: center; font-size: 7.5pt; font-weight: 800; padding: 5px 0; letter-spacing: 1px; color: #fbbf24; border-bottom: 1px solid rgba(255,255,255,0.1); }
-      .isi-tatatertib { padding: 8px 12px; font-size: 6.2pt; color: #cbd5e1; line-height: 1.35; flex: 1; }
-      .isi-tatatertib ol { margin: 0; padding-left: 12px; }
-      .isi-tatatertib li { margin-bottom: 2.5px; }
-      
-      .footer-belakang {
-        padding: 4px 12px 6px 12px;
-        border-top: 1px dashed rgba(255,255,255,0.1);
-        font-size: 5pt;
-        color: #94a3b8;
-        text-align: center;
-        font-weight: 500;
-      }
-      
-      @media print {
-        body { background: transparent; padding: 0; margin: 0; }
-        .kartu-id { box-shadow: none; border: 1px solid #94a3b8; margin-bottom: 15px; }
-        .btn-print-action { display: none !important; }
-      }
-      .btn-print-action { padding: 10px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); transition: all 0.2s; margin-bottom: 10px; }
-      .btn-print-action:hover { background: #1d4ed8; }
-    </style>
-  </head>
-  <body>
+/*=========================================================
+JUDUL KARTU
+=========================================================*/
+.sub-title{
+    position:relative;
+    background:white;
+    text-align:center;
+    padding:2px 0;
+    border-top:2px solid #1976d2;
+    border-bottom:2px solid #1976d2;
+    z-index:15;
+}
+.sub-title span{
+    font-size:8.5pt;
+    font-weight:900;
+    color:#1565c0;
+    letter-spacing:1px;
+}
 
-    <button class="btn-print-action" onclick="window.print()">🖨 KIRIM KE PRINTER (PRINT KARTU)</button>
+/*=========================================================
+AREA DATA UTAMA
+=========================================================*/
+.area-konten{
+    display:flex;
+    gap:8px;
+    padding:7px 9px;
+    position:relative;
+    z-index:10;
+}
+.watermark-logo{
+    position:absolute;
+    left:53%;
+    top:58%;
+    transform:translate(-50%,-50%);
+    width:37mm;
+    height:37mm;
+    opacity:.10;
+    object-fit:contain;
+    z-index:2;
+}
 
-    <!-- KARTU ID DEPAN -->
-    <div class="kartu-id">
-      <div class="kop-sekolah">
-        <img src="${logoProvinsiBase64}" alt="Logo Provinsi">
-        <div class="kop-text">
-          <h3>PEMERINTAH PROVINSI SULAWESI TENGAH</h3>
-          <h4>DINAS PENDIDIKAN</h4>
-          <h2>SMK NEGERI 1 MEPANGA</h2>
-          <p>Jalan Nusantara No 116, Kayu Agung, Mepanga, Parigi Moutong</p>
-        </div>
-        <img src="${logoSekolahBase64}" alt="Logo Sekolah">
-      </div>
-      
-      <div class="banner-title">
-        <span>KARTU PELAJAR <em>/ STUDENT CARD</em></span>
-      </div>
-      <div style="
-text-align:center;
-font-size:5pt;
-font-weight:700;
-color:#0f4ea9;
-margin-top:1px;
-">
+/*=========================================================
+FOTO SISWA
+=========================================================*/
+.sisi-kiri{
+    width:20mm;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+}
+.foto-frame{
+    width:19mm;
+    height:24mm;
+    object-fit:cover;
+    background:white;
+    border-radius:4px;
+    border:3px solid white;
+    box-shadow: 0 0 0 2px #1565c0, 0 5px 8px rgba(0,0,0,.25);
+}
 
-No. Kartu :
-KP-${tahunSekarang}-${String(index+1).padStart(4,'0')}
+/*=========================================================
+TABEL DATA SISWA
+=========================================================*/
+.sisi-kanan{
+    flex:1;
+}
 
-</div>
-      
-      <div class="area-konten">
-        <!-- SISI KIRI: PAS FOTO -->
-        <div class="foto-container">
-          <img src="${fotoSiswa}" class="foto-frame" style="image-rendering: -webkit-optimize-contrast; image-rendering: high-quality;" alt="Foto Siswa">
-        </div>
-        
-        <!-- SISI KANAN: DETAIL & FOOTER ROW -->
-        <div class="kanan-container">
-          <table class="tabel-data">
-            <tr><td class="lbl">NISN</td><td class="strip">:</td><td class="val" style="color: #1e3a8a; font-weight:800;">${siswa.nisn || '-'}</td></tr>
-            <tr><td class="lbl">Nama</td><td class="strip">:</td><td class="val" style="text-transform: uppercase; color: #0f172a; font-weight:800; font-size:6.8pt;">${siswa.nama}</td></tr>
-            <tr><td class="lbl">Lahir</td><td class="strip">:</td><td class="val">${ttl}</td></tr>
-            <tr><td class="lbl">Alamat</td><td class="strip">:</td><td class="val" style="font-size:5.8pt; font-weight:500; line-height:1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${alamat}</td></tr>
-            <tr><td class="lbl">Berlaku</td><td class="strip">:</td><td class="val" style="color: #ea580c;">Juli ${tahunLulus}</td></tr>
-          </table>
-          
-          <!-- SEJAJAR HORISONTAL: BARCODE KIRI & TTD KANAN -->
-          <div class="bawah-row">
-           <div class="barcode-box">
+/*=========================================================
+TANDA TANGAN & STEMPEL
+=========================================================*/
+.area-ttd-kepsek{
+    position:absolute;
+    bottom:10px;
+    right:10px;
+    width:32mm;
+    text-align:center;
+    font-size:5pt;
+    color:#111827;
+    z-index:20;
+}
+.wrapper-ttd{
+    position:relative;
+    height:8mm;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+.img-cap{
+    position:absolute;
+    height:11mm;
+    opacity:.85;
+    left:0;
+}
+.img-ttd{
+    height:7mm;
+}
 
-<img
-src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(urlIdentitas)}"
-style="
-width:15mm;
-height:15mm;
-">
+/*=========================================================
+KARTU BAGIAN BELAKANG
+=========================================================*/
+.bg-belakang{
+    width:100%;
+    height:100%;
+    background: linear-gradient(135deg,#0f3d91 0%,#0b2148 100%);
+    color:white;
+    display:flex;
+    flex-direction:column;
+}
+.header-tatatertib{
+    background:rgba(255,255,255,.10);
+    padding:7px;
+    text-align:center;
+    font-size:8.5pt;
+    font-weight:900;
+    letter-spacing:1px;
+    color:#ffd54f;
+}
+.isi-tatatertib{
+    flex:1;
+    padding:9px 14px;
+    font-size:6pt;
+    line-height:1.45;
+}
+.isi-tatatertib ol{
+    padding-left:13px;
+}
+.isi-tatatertib li{
+    margin-bottom:3.5px;
+}
+.footer-belakang{
+    padding:6px;
+    text-align:center;
+    font-size:5pt;
+    border-top:1px dashed rgba(255,255,255,.20);
+}
 
-</div>
-            
-            <div class="area-ttd-kepsek">
-              Mepanga, ${new Date().toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}<br>
-              Kepala Sekolah,<br>
-              <div class="wrapper-ttd">
-                ${capStempelBase64 ? `<img src="${capStempelBase64}" class="img-cap">` : ''}
-                ${ttdKepsekBase64 ? `<img src="${ttdKepsekBase64}" class="img-ttd">` : ''}
-              </div>
-              <span style="font-weight: 800; text-decoration: underline; color: #0f172a; font-size: 5.2pt; display:block;">${namaKepsek}</span>
-              <span style="color: #64748b; font-size: 4.5pt; display:block;">NIP. ${nipKepsek.replace('NIP.', '').trim()}</span>
+@media print{
+    body{
+        background:white;
+        padding:0;
+        margin:0;
+    }
+    .kartu-id{
+        box-shadow:none !important;
+        border:1px solid #cbd5e1 !important; 
+    }
+    .btn-print-action{
+        display:none !important;
+    }
+}
+
+.btn-print-action{
+    padding:12px 28px;
+    background:#0f766e;
+    color:white;
+    border:none;
+    border-radius:8px;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2);
+    transition: all 0.2s;
+}
+.btn-print-action:hover {
+    background: #0d615a;
+}
+</style>
+</head>
+<body>
+
+  <button class="btn-print-action" onclick="window.print()">🖨 CETAK KARTU (PRINT OUT)</button>
+  
+  <div class="container-cetak-tunggal">
+    
+    <!-- KARTU BAGIAN DEPAN (POSISI ATAS) -->
+    <div class="kartu-id" style="position: relative; overflow: hidden; background: #fff;">
+        <div class="bg-strip1"></div>
+        <div class="bg-strip2"></div>
+        <div class="bg-strip3"></div>
+        <div class="bg-circle1"></div>
+        <div class="bg-circle2"></div>
+
+        <img src="${logoSekolahBase64}" class="watermark-logo" style="position: absolute; top: 58%; left: 50%; transform: translate(-50%, -45%); width: 34mm; height: 34mm; opacity: 0.12; z-index: 1; pointer-events: none; object-fit: contain;">
+
+        <div class="kop-sekolah" style="z-index: 10; position: relative; border-bottom: none; padding-bottom: 2px; height: 13mm;">
+            <img src="${logoProvinsiBase64}">
+            <div class="kop-text">
+                <h3>PEMERINTAH PROVINSI SULAWESI TENGAH</h3>
+                <h4>DINAS PENDIDIKAN</h4>
+                <h2>SMK NEGERI 1 MEPANGA</h2>
+                <p style="margin-bottom: 2px;">Jalan Nusantara No.116 Kayu Agung, Kecamatan Mepanga</p>
             </div>
-          </div>
+            <img src="${logoSekolahBase64}">
         </div>
-      </div>
-      
-      <div class="dekorasi-bawah"></div>
+
+        <div style="z-index: 10; position: relative; margin: 0 6px; box-sizing: border-box; border-bottom: 1.8px solid #000; border-top: 0.6px solid #000; height: 3px;"></div>
+
+        <div class="sub-title" style="z-index: 10; position: relative; border: none; padding: 2px 0 3px 0; text-align: center; margin-top: 1px;">
+            <span style="font-size: 8.5pt; font-weight: 800; color: #1e3a8a; letter-spacing: 1.5px; border-bottom: 1.5px solid #1e3a8a; padding-bottom: 0.5px; text-transform: uppercase;">KARTU PELAJAR</span>
+        </div>
+
+        <div class="area-konten" style="display: flex; padding: 1px 8px; gap: 8px; height: calc(55.98mm - 21.5mm); position: relative; z-index: 5; align-items: flex-start;">
+            <div class="sisi-kiri" style="display: flex; flex-direction: column; align-items: center; width: 19mm; flex-shrink: 0; position: relative; z-index: 10; gap: 3px; margin-top: 3px;">
+                <img src="${fotoSiswa}" class="foto-frame" style="width: 19mm; height: 24mm; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="background: #16a34a; color: white; font-size: 4.2pt; padding: 1px 5px; border-radius: 10px; font-weight: 700; text-align: center; width: fit-content; line-height: 1; letter-spacing: 0.3px;">
+                    AKTIF
+                </div>
+            </div>
+
+            <div class="sisi-kanan" style="flex-grow: 1; z-index: 5; margin-top: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 2.5px; font-size: 5.5pt; line-height: 1.15; color: #1e293b;">
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">Nama</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="color: #0057b8; font-weight: 800; text-transform: uppercase; white-space: nowrap; font-size: 5.5pt;">${siswa.nama}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">NISN</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${siswa.nisn || '-'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">TTL</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${ttl}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">JK</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${siswa.jenisKelamin || '-'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">Kelas</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${siswa.kelas}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">Alamat</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 600; color: #0f172a; white-space: nowrap;">${alamat}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;">
+                        <span style="font-weight: 600; color: #475569;">Berlaku</span>
+                        <span style="text-align: center; color: #475569;">:</span>
+                        <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">s/d ${tahunLulus}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="area-ttd-kepsek" style="position: absolute; bottom: 14px; right: 6px; text-align: center; font-size: 4.8pt; width: 28mm; line-height: 1.1; z-index: 10; color: #000000;">
+                <div style="font-weight: 500; margin-top: 1px; color: #000000;">
+                    Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+                <div style="margin-top: 1px; font-weight: 600; color: #000000;">Kepala Sekolah,</div>
+
+                <div class="wrapper-ttd" style="height: 8mm; position: relative; display: flex; align-items: center; justify-content: center; margin: 1px 0;">
+                    ${
+                        capStempelBase64
+                        ? `<img src="${capStempelBase64}" class="img-cap" style="max-height: 19mm; position: absolute; left: -3px; top: 50%; transform: translateY(-50%); opacity: 0.9; mix-blend-mode: multiply; z-index: 11;">`
+                        : ''
+                    }
+                    ${
+                        ttdKepsekBase64
+                        ? `<img src="${ttdKepsekBase64}" class="img-ttd" style="max-height: 18.5mm; position: absolute; top: 50%; transform: translateY(-50%); z-index: 12; mix-blend-mode: multiply;">`
+                        : ''
+                    }
+                </div>
+
+                <div style="font-weight: 800; font-size: 5.6pt; color: #000000; text-decoration: underline; line-height: 1; position: relative; z-index: 13; margin-top: 1px;">
+                    ${namaKepsek}
+                </div>
+                <div style="font-size: 4.8pt; font-weight: 600; color: #334155; line-height: 1; margin-top: 1px; position: relative; z-index: 13;">
+                    NIP. ${nipKepsek.replace('NIP.', '').trim()}
+                </div>
+            </div>
+        </div>
+
+        <div style="position: absolute; left: 0; right: 0; bottom: 0px; z-index: 30; background: #1e3a8a; height: 3.8mm; display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 4.4pt; font-weight: 700; color: white; letter-spacing: 0.4px; white-space: nowrap; text-transform: uppercase;">
+                SMK NEGERI 1 MEPANGA • MUDA • BISA • LUAR BIASA
+            </span>
+        </div>
     </div>
 
-    <!-- KARTU ID BELAKANG -->
-    <div class="kartu-id">
-      <div class="bg-belakang">
-        <div class="header-tatatertib">TATA TERTIB KARTU PELAJAR</div>
-        <div class="isi-tatatertib">
-          <ol>
-            <li>Kartu ini adalah kartu resmi bukti keanggotaan siswa aktif di SMK Negeri 1 Mepanga.</li>
-            <li>Siswa wajib mengenakan/membawa kartu identitas pelajar ini setiap hari selama kegiatan KBM berlangsung.</li>
-            <li>Apabila kartu ini hilang atau mengalami kerusakan, siswa wajib segera melapor ke bagian Kesiswaan / Tata Usaha Sekolah.</li>
-            <li>Kartu tidak boleh dipinjamkan, dipindahtangankan, atau disalahgunakan untuk keperluan di luar akademik.</li>
-            <li>Jika menemukan kartu ini, mohon dikembalikan ke alamat sekolah tertera di halaman depan.</li>
-          </ol>
+    <!-- KARTU BAGIAN BELAKANG (POSISI BAWAH) -->
+    <div class="kartu-id" style="position: relative; overflow: hidden; width: 87.60mm; height: 55.98mm; background: #fff; box-sizing: border-box;">
+        <div class="bg-belakang" style="height: 100%; display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; position: relative;">
+            <div class="bg-circle1"></div>
+            <div class="bg-circle2"></div>
+            <div class="bg-strip1"></div>
+            <div class="bg-strip2"></div>
+
+            <img src="${logoSekolahBase64}" class="watermark-logo" style="opacity: .05; width: 34mm; height: 34mm; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -45%); z-index: 1; pointer-events: none; object-fit: contain;">
+
+            <div class="header-tatatertib" style="position: relative; z-index: 10; margin-top: 4px;">
+                TATA TERTIB PEMEGANG KARTU PELAJAR
+            </div>
+
+            <div class="isi-tatatertib" style="position: relative; z-index: 10; padding: 2px 10px; font-size: 5.2pt; line-height: 1.25;">
+                <ol style="margin: 0; padding-left: 10px;">
+                    <li>Kartu Pelajar merupakan identitas resmi peserta didik SMK Negeri 1 Mepanga.</li>
+                    <li>Kartu wajib dibawa setiap hari selama kegiatan pembelajaran berlangsung.</li>
+                    <li>Kartu ini tidak boleh dipindahtangankan kepada orang lain.</li>
+                    <li>Kehilangan kartu wajib segera dilaporkan kepada Wali Kelas/Kesiswaan.</li>
+                    <li>Kartu yang rusak atau hilang dapat diganti sesuai ketentuan sekolah.</li>
+                    <li>QR Code pada kartu digunakan sebagai identitas digital siswa dan tidak boleh dirusak.</li>
+                    <li>Penyalahgunaan kartu pelajar akan dikenakan sanksi sesuai tata tertib sekolah.</li>
+                </ol>
+            </div>
+
+            <div style="position: relative; z-index: 10; margin: 0 10px; padding: 4px; border-radius: 6px; background: rgba(255,255,255,.08); font-size: 4.8pt; line-height: 1.3; text-align: center; color: white;">
+                <b>SMK NEGERI 1 MEPANGA</b><br>
+                Jl. Nusantara No.116 Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong, Sulawesi Tengah
+            </div>
+
+            <div style="position: relative; z-index: 10; display: flex; justify-content: center; margin-top: -1px; margin-bottom: 2px;">
+                <div style="background: white; padding: 3px; border-radius: 4px; line-height: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(siswa.nisn || siswa.nis || siswa.id)}" style="width: 12mm; height: 12mm; object-fit: contain;">
+                </div>
+            </div>
         </div>
-        <div class="footer-belakang">
-          Mepanga, Parigi Moutong, Sulawesi Tengah &copy; ${new Date().getFullYear()} SMKN 1 Mepanga
-        </div>
-      </div>
     </div>
 
-  </body>
-  </html>
-`);
-win.document.close();
+  </div>
+</body>
+</html>
+  `);
+  win.document.close();
 }
 
 function aksiBukaJendelaCetakMassal(filterKelas = "SEMUA") {
