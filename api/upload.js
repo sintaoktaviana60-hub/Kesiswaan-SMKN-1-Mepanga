@@ -1,5 +1,5 @@
 const cloudinary = require("cloudinary").v2;
-const formidable = require("formidable");
+const { IncomingForm } = require("formidable");
 const fs = require("fs");
 
 cloudinary.config({
@@ -17,9 +17,9 @@ module.exports = async (req, res) => {
     });
   }
 
-  const form = formidable({
-    multiples:false
-  });
+const form = new IncomingForm({
+    multiples: false
+});
 
   form.parse(req, async (err, fields, files) => {
 
