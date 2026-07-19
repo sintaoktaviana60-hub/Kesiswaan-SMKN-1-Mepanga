@@ -11171,7 +11171,7 @@ function renderInputDataPelajar() {
               ${dataSiswaTampil.length === 0 ? `<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">Belum ada data siswa.</td></tr>` : ''}
               ${dataSiswaTampil.map(s => {
                 // Mengecek ketersediaan data foto baik dari DB utama atau kelengkapanData cache
-                const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(s.id));
+                const kData = DB.kelengkapanData ? DB.kelengkapanData[s.id] : null;
                 const adaFoto = !!(kData && kData.foto);
                 const badgeFoto = adaFoto 
                   ? '<span class="text-blue-600 font-medium text-xs">✔ Tersedia</span>' 
@@ -11389,6 +11389,7 @@ console.log("Response:", hasil);
 
 
 // Fungsi simpan identitas siswa versi tampilan lama yang disinkronkan ke Firebase
+// Fungsi simpan identitas siswa versi perbaikan untuk sinkronisasi Firebase
 function simpanIdentitasSiswa() {
   const siswaId = document.getElementById('mdlSiswaId').value;
   if (!siswaId) {
@@ -11399,12 +11400,12 @@ function simpanIdentitasSiswa() {
   const tempatLahir = document.getElementById('mdlTempatLahir').value.trim();
   const tanggalLahir = document.getElementById('mdlTanggalLahir').value;
   const alamat = document.getElementById('mdlAlamat').value.trim();
-  
-  // OPSI 1: Matikan Base64 dengan mengosongkan string foto
-const foto = document.getElementById("mdlBase64Foto").value;
+  const foto = document.getElementById("mdlBase64Foto").value;
 
-  if (!DB.kelengkapanData) DB.kelengkapanData = [];
-  const indexData = DB.kelengkapanData.findIndex(d => String(d.siswaId) === String(siswaId));
+  // Pastikan inisialisasi awal database lokal berbentuk Objek, bukan Array
+  if (!DB.kelengkapanData || Array.isArray(DB.kelengkapanData)) {
+    DB.kelengkapanData = {};
+  }
   
   const payloadData = {
     siswaId: siswaId,
@@ -11415,22 +11416,22 @@ const foto = document.getElementById("mdlBase64Foto").value;
     updatedAt: new Date().toISOString()
   };
 
-  // Update data di memori lokal (DB Cache)
-  if (indexData > -1) {
-    DB.kelengkapanData[indexData] = payloadData;
-  } else {
-    DB.kelengkapanData.push(payloadData);
-  }
+  // 1. Perbarui Cache lokal dengan format key berbasis siswaId
+  DB.kelengkapanData[siswaId] = payloadData;
 
   showToast('Sedang menyinkronkan data...', 'info');
 
-const dbRef = firebase.database().ref('kesiswaan_cloud/kelengkapanData/' + siswaId); 
+  // 2. Tembak ke Node Firebase yang tepat
+  const dbRef = firebase.database().ref('kesiswaan_cloud/kelengkapanData/' + siswaId); 
   
   dbRef.update(payloadData)
     .then(() => {
       showToast('Data Tersimpan ke Firebase!', 'success');
       tutupModalIdentitas();
+      
+      // 3. Paksa render ulang agar foto langsung terbaca di UI
       renderInputDataPelajar(); 
+      
       if (typeof addAuditLog === 'function') {
         addAuditLog('Update Identitas Siswa ID: ' + siswaId);
       }
