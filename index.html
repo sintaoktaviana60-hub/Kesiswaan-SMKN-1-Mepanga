@@ -352,31 +352,7 @@ const FirebaseState = {
   }
 
 };
-// Helper universal untuk mengubah respons Firebase (Object/Array) ke Array Murni
-function parseFirebaseData(data) {
-  // Filter siswa agar hanya mengambil data yang benar-benar memiliki Nama
-DB.siswa = safeArray(cloudData.siswa).filter(s => s && (s.nama || s.name));
-  if (!data) return [];
-  
-  // Jika Firebase mengirim Array
-  if (Array.isArray(data)) {
-    return data.filter(item => item !== null && item !== undefined);
-  }
-  
-  // Jika Firebase mengirim Object (misal pakai push ID '-Nx8...' atau index string '0', '1')
-  if (typeof data === 'object') {
-    return Object.keys(data).map(key => {
-      const val = data[key];
-      // Jika di dalam val belum ada id, sisipkan key-nya sebagai id
-      if (typeof val === 'object' && val !== null) {
-        return { id: val.id || key, ...val };
-      }
-      return val;
-    }).filter(Boolean);
-  }
 
-  return [];
-}
 // ==========================================
 // FIREBASE CORE
 // ==========================================
@@ -763,13 +739,33 @@ function importDatabaseDariJSON(event) {
   reader.readAsText(file);
 }
 
+// Helper universal untuk mengubah respons Firebase (Object/Array) ke Array Murni
+function parseFirebaseData(data) {
+  if (!data) return [];
+  
+  if (Array.isArray(data)) {
+    return data.filter(item => item !== null && item !== undefined);
+  }
+  
+  if (typeof data === 'object') {
+    return Object.keys(data).map(key => {
+      const val = data[key];
+      if (typeof val === 'object' && val !== null) {
+        return { id: val.id || key, ...val };
+      }
+      return val;
+    }).filter(Boolean);
+  }
+
+  return [];
+}
+
 // =================================================================================
-// FUNGSI OTOMATIS AMBIL DATA DARI DATABASE (VERSI SINKRON AMAN - ANTI REFRESH)
+// FUNGSI OTOMATIS AMBIL DATA DARI DATABASE (VERSI REVISI - ANTI DATA SAMPAH)
 // =================================================================================
 function muatSemuaDataDariDatabase() {
   console.log("Mengaktifkan mode Sinkronisasi Penuh & Proteksi Data Realtime Firebase...");
 
-  // 1. Deteksi objek Firebase Realtime Database
   let targetDb = null;
   if (typeof database !== 'undefined') {
     targetDb = database;
@@ -777,7 +773,6 @@ function muatSemuaDataDariDatabase() {
     targetDb = window.firebase.apps[0].database();
   }
 
-  // Akun pengaman bawaan sistem
   const daftarAkunDemo = [
     { id: 1, username: 'admin', password: '45dqNLkN', role: 'admin', name: 'Admin Kesiswaan Utama' },
   ];
@@ -785,133 +780,116 @@ function muatSemuaDataDariDatabase() {
   if (targetDb) {
     console.log("Membuka jalur sinkronisasi aktivitas data Realtime Firebase...");
     
-    // Dengarkan aktivitas database Firebase secara langsung
- targetDb.ref('kesiswaan_cloud').on('value', (snapshot) => {
-  const cloudData = snapshot.val();
-  if (cloudData) {
-    console.log("Aktivitas data dari Firebase Berhasil Diterima!");
+    targetDb.ref('kesiswaan_cloud').on('value', (snapshot) => {
+      const cloudData = snapshot.val();
+      if (cloudData) {
+        console.log("Aktivitas data dari Firebase Berhasil Diterima!");
 
-    // Helper Aman Konversi Firebase -> Array Murni
-    const safeArray = (data) => {
-      if (!data) return [];
-      if (Array.isArray(data)) return data.filter(Boolean);
-      if (typeof data === 'object') return Object.values(data).filter(Boolean);
-      return [];
-    };
+        const safeArray = (data) => {
+          if (!data) return [];
+          if (Array.isArray(data)) return data.filter(Boolean);
+          if (typeof data === 'object') return Object.values(data).filter(Boolean);
+          return [];
+        };
 
-    // 1. MUA T DATA MASTER & TRANSAKSI (PASTI ARRAY)
-    DB.users = safeArray(cloudData.users);
-    DB.siswa = safeArray(cloudData.siswa);
-    DB.kelas = safeArray(cloudData.kelas);
-    DB.pelanggaran = safeArray(cloudData.pelanggaran);
-    DB.tatatertib = safeArray(cloudData.tatatertib); // <-- MENCEGAH EROR .find()
-    DB.kelengkapanData = safeArray(cloudData.kelengkapanData);
-    DB.kreditPoin = safeArray(cloudData.kreditPoin);
-    DB.kreditPoinMaster = safeArray(cloudData.kreditPoinMaster);
-    DB.penebusan_poin = safeArray(cloudData.penebusan_poin);
-    DB.riwayatTindakan = safeArray(cloudData.riwayatTindakan);
-    DB.auditLog = safeArray(cloudData.auditLog);
-    DB.identitas = cloudData.identitas || DB.identitas;
-    DB.hariAktif = cloudData.hariAktif || [];
+        // 1. MUAT DATA MASTER & TRANSAKSI
+        DB.users = safeArray(cloudData.users);
+        
+        // Filter siswa murni hanya yang memiliki Nama & ID valid
+        DB.siswa = safeArray(cloudData.siswa).filter(s => s && (s.nama || s.name) && s.id);
+        
+        DB.kelas = safeArray(cloudData.kelas);
+        
+        // Cleanup data sampah/invalid pada pelanggaran saat dimuat
+        DB.pelanggaran = safeArray(cloudData.pelanggaran).filter(p => p && (p.siswaId || p.idSiswa));
+        DB.tatatertib = safeArray(cloudData.tatatertib);
+        DB.kelengkapanData = safeArray(cloudData.kelengkapanData);
+        DB.kreditPoin = safeArray(cloudData.kreditPoin);
+        DB.kreditPoinMaster = safeArray(cloudData.kreditPoinMaster);
+        DB.penebusan_poin = safeArray(cloudData.penebusan_poin);
+        DB.riwayatTindakan = safeArray(cloudData.riwayatTindakan);
+        DB.auditLog = safeArray(cloudData.auditLog);
+        DB.identitas = cloudData.identitas || DB.identitas;
+        DB.hariAktif = cloudData.hariAktif || [];
 
-    // Log Debugging Siswa
-    if (DB.siswa.length > 0) {
-      console.log("Data siswa terakhir dari Firebase:", DB.siswa[DB.siswa.length - 1]);
-    }
-    console.log("Total DB.siswa =", DB.siswa.length);
-
-    // 2. LOAD DATA KEHADIRAN (FLATTEN STRUCTURE)
-    DB.kehadiran = [];
-    if (cloudData.kehadiran) {
-      Object.values(cloudData.kehadiran).forEach(kelas => {
-        if (Array.isArray(kelas)) {
-          DB.kehadiran.push(...kelas.filter(Boolean));
-        } else if (typeof kelas === 'object' && kelas !== null) {
-          DB.kehadiran.push(...Object.values(kelas).filter(Boolean));
+        // 2. LOAD DATA KEHADIRAN
+        DB.kehadiran = [];
+        if (cloudData.kehadiran) {
+          Object.values(cloudData.kehadiran).forEach(kelas => {
+            if (Array.isArray(kelas)) {
+              DB.kehadiran.push(...kelas.filter(Boolean));
+            } else if (typeof kelas === 'object' && kelas !== null) {
+              DB.kehadiran.push(...Object.values(kelas).filter(Boolean));
+            }
+          });
         }
-      });
-    }
 
-    // 3. BACKUP POIN SISWA (JIKA ADA)
-    if (cloudData.siswaPoinBackup && DB.siswa.length > 0) {
-      DB.siswa.forEach(s => {
-        const match = cloudData.siswaPoinBackup.find(x => String(x.id) === String(s.id));
-        if (match) {
-          s.poinAbsen = match.poinAbsen || 0;
-          s.poinPelanggaranDasar = match.poinPelanggaranDasar || 0;
-          s.poinPenebusan = match.poinPenebusan || 0;
-          s.poin = match.poin || s.poin;
+        // 3. AKUN DEMO
+        if (typeof daftarAkunDemo !== 'undefined' && Array.isArray(daftarAkunDemo)) {
+          daftarAkunDemo.forEach(akun => {
+            if (!DB.users.some(x => x.username === akun.username)) {
+              DB.users.push(akun);
+            }
+          });
         }
-      });
-    }
 
-    // 4. AKUN DEMO
-    if (typeof daftarAkunDemo !== 'undefined' && Array.isArray(daftarAkunDemo)) {
-      daftarAkunDemo.forEach(akun => {
-        if (!DB.users.some(x => x.username === akun.username)) {
-          DB.users.push(akun);
+        // 4. KALKULASI MATEMATIKA REALTIME POIN SISWA
+        if (DB.siswa.length > 0) {
+          DB.siswa.forEach(s => {
+            const logAbsenSiswa = DB.kehadiran.filter(k => k && String(k.siswaId) === String(s.id));
+            const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status).trim())).length;
+            const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status).trim())).length;
+            const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).trim())).length;
+            const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
+
+            let poinTataTertib = 0;
+            const pelanggaranSiswa = DB.pelanggaran.filter(p => p && (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)));
+            pelanggaranSiswa.forEach(p => {
+              const tt = DB.tatatertib.find(x => x && (
+                String(x.id) === String(p.jenisId) || 
+                String(x.kode) === String(p.jenisId) || 
+                String(x.id) === String(p.tatatertibId)
+              ));
+              const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
+              poinTataTertib += poinFinal;
+            });
+
+            let totalPoinPenebusan = 0;
+            const penebusanSiswa = DB.penebusan_poin.filter(p => p && String(p.siswaId) === String(s.id));
+            penebusanSiswa.forEach(p => {
+              totalPoinPenebusan += (parseInt(p.poinPemulihan) || 0);
+            });
+
+            s.poinPelanggaranDasar = poinTataTertib;
+            s.poinAbsen = poinKetidakhadiran;
+            s.poinPenebusan = totalPoinPenebusan;
+            const totalPoinKotor = poinTataTertib + poinKetidakhadiran;
+            s.poin = Math.max(0, totalPoinKotor - totalPoinPenebusan);
+          });
         }
-      });
-    }
 
-    // 5. KALKULASI MATEMATIKA REALTIME
-    if (DB.siswa.length > 0) {
-      DB.siswa.forEach(s => {
-        // Log Absensi
-        const logAbsenSiswa = DB.kehadiran.filter(k => k && String(k.siswaId) === String(s.id));
-        const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status).trim())).length;
-        const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status).trim())).length;
-        const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).trim())).length;
-        const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
+        // 5. RENDER HALAMAN UTAMA SECARA AMAN
+        const halamanInput = [
+          "input-pelanggaran",
+          "kehadiran",
+          "input-kredit-poin",
+          "admin-kredit-poin",
+          "bimbingan-kesiswaan",
+          "input-data-pelajar"
+        ];
 
-        // Pelanggaran Tata Tertib
-        let poinTataTertib = 0;
-        const pelanggaranSiswa = DB.pelanggaran.filter(p => p && (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)));
-        pelanggaranSiswa.forEach(p => {
-          // Aman karena DB.tatatertib dijamin Array Murni
-          const tt = DB.tatatertib.find(x => x && (String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId)));
-          const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
-          poinTataTertib += poinFinal;
-        });
-
-        // Penebusan Poin
-        let totalPoinPenebusan = 0;
-        const penebusanSiswa = DB.penebusan_poin.filter(p => p && String(p.siswaId) === String(s.id));
-        penebusanSiswa.forEach(p => {
-          totalPoinPenebusan += (parseInt(p.poinPemulihan) || 0);
-        });
-
-        // Set Nilai Akhir Siswa
-        s.poinPelanggaranDasar = poinTataTertib;
-        s.poinAbsen = poinKetidakhadiran;
-        s.poinPenebusan = totalPoinPenebusan;
-        const totalPoinKotor = poinTataTertib + poinKetidakhadiran;
-        s.poin = Math.max(0, totalPoinKotor - totalPoinPenebusan);
-      });
-    }
-
-    // 6. RENDER HALAMAN (SAFE TRIGGER)
-    const halamanInput = [
-      "input-pelanggaran",
-      "kehadiran",
-      "input-kredit-poin",
-      "admin-kredit-poin",
-      "bimbingan-kesiswaan",
-      "input-data-pelajar"
-    ];
-
-    const activePage = currentPage || 'dashboard';
-    if (typeof renderPage === "function" && !halamanInput.includes(activePage)) {
-      renderPage(activePage);
-    }
-
+        const activePage = currentPage || 'dashboard';
+        if (typeof renderPage === "function" && !halamanInput.includes(activePage)) {
+          renderPage(activePage);
+        }
+      }
+    });
   } else {
-    // Jika Cloud Kosong
+    // Jika Database Tidak Ditemukan / Offline Mode
     if (!Array.isArray(DB.users)) DB.users = typeof daftarAkunDemo !== 'undefined' ? [...daftarAkunDemo] : [];
     if (typeof renderPage === 'function') renderPage(currentPage || 'dashboard');
   }
-})}}
-
+}
 
 let currentUser = null;
 let currentPage = 'dashboard';
