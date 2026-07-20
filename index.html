@@ -812,58 +812,48 @@ function muatSemuaDataDariDatabase() {
         DB.identitas = cloudData.identitas || DB.identitas;
         DB.hariAktif = cloudData.hariAktif || [];
 
-        // 2. LOAD DATA KEHADIRAN
-// 2. LOAD DATA KEHADIRAN (BISA BACA STRUKTUR LAMA & BARU SEKALIGUS)
-// 2. LOAD DATA KEHADIRAN (HIBRIDA: BISA BACA ARRAY FLAT LAMA & OBJEK TANGGAL-KELAS BARU)
+// 2. LOAD DATA KEHADIRAN (HIBRIDA & DEDUPLIKASI ANTI-DATA GANDA)
         DB.kehadiran = [];
         if (cloudData.kehadiran) {
           const rawKehadiran = cloudData.kehadiran;
+          const tempKehadiran = [];
 
-          // JIKA DATA LAMA: Berupa Array [0, 1, 2, 3...]
-          if (Array.isArray(rawKehadiran)) {
-            rawKehadiran.filter(Boolean).forEach(item => {
-              if (typeof item === 'object') {
-                DB.kehadiran.push(item);
-              }
-            });
-          } 
-          // JIKA DATA MIX / BARU: Berupa Objek { "2026-07-20_XII_AKL": { ... }, ... }
-          else if (typeof rawKehadiran === 'object') {
-            Object.keys(rawKehadiran).forEach(key => {
-              const nodeUtama = rawKehadiran[key];
-              if (!nodeUtama) return;
-
-              // Kasus A: Jika node di bawah Key adalah Array daftar siswa
-              if (Array.isArray(nodeUtama)) {
-                nodeUtama.filter(Boolean).forEach(siswaAbsen => {
-                  if (typeof siswaAbsen === 'object') {
-                    // Jika di dalam data siswa belum tercatat tanggal/kelas, tempelkan dari Key
-                    if (!siswaAbsen.tanggal && key.includes('_')) {
-                      siswaAbsen.tanggal = key.split('_')[0];
-                    }
-                    DB.kehadiran.push(siswaAbsen);
-                  }
-                });
-              } 
-              // Kasus B: Jika node di bawah Key adalah Objek kumpulan siswa
-              else if (typeof nodeUtama === 'object') {
-                // Cek jika nodeUtama ini adalah item absen tunggal
-                if (nodeUtama.siswaId || nodeUtama.idSiswa || nodeUtama.status) {
-                  DB.kehadiran.push(nodeUtama);
-                } else {
-                  // Jika ini adalah pembungkus tanggal_kelas, ekstrak semua siswa di dalamnya
-                  Object.values(nodeUtama).filter(Boolean).forEach(siswaAbsen => {
-                    if (typeof siswaAbsen === 'object') {
-                      if (!siswaAbsen.tanggal && key.includes('_')) {
-                        siswaAbsen.tanggal = key.split('_')[0];
-                      }
-                      DB.kehadiran.push(siswaAbsen);
-                    }
-                  });
+          // Helper rekursif mengekstrak semua objek absen
+          const ekstrak = (node, keyParent = "") => {
+            if (!node) return;
+            if (Array.isArray(node)) {
+              node.forEach(item => ekstrak(item, keyParent));
+            } else if (typeof node === 'object') {
+              if (node.siswaId || node.idSiswa || node.status) {
+                // Tempelkan tanggal jika tidak ada di dalam objek tetapi ada di key parent
+                if (!node.tanggal && keyParent.includes('_')) {
+                  node.tanggal = keyParent.split('_')[0];
                 }
+                tempKehadiran.push(node);
+              } else {
+                Object.keys(node).forEach(k => ekstrak(node[k], k));
               }
-            });
-          }
+            }
+          };
+
+          ekstrak(rawKehadiran);
+
+          // PROSES DEDUPLIKASI KETAT: Menyaring data ganda berdasarkan (siswaId + tanggal)
+          const mapUnik = new Map();
+          tempKehadiran.forEach(item => {
+            const sId = String(item.siswaId || item.idSiswa || '').trim();
+            const tgl = String(item.tanggal || '').trim();
+            
+            if (sId && tgl) {
+              const uniqueKey = `${sId}_${tgl}`;
+              // Mengambil entitas data paling valid/terbaru pada tanggal tersebut
+              mapUnik.set(uniqueKey, item);
+            } else if (item.status) {
+              mapUnik.set(Math.random().toString(), item);
+            }
+          });
+
+          DB.kehadiran = Array.from(mapUnik.values());
         }
 
         // 3. AKUN DEMO
