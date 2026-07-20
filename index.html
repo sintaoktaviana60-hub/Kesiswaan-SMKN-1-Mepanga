@@ -814,25 +814,56 @@ function muatSemuaDataDariDatabase() {
 
         // 2. LOAD DATA KEHADIRAN
 // 2. LOAD DATA KEHADIRAN (BISA BACA STRUKTUR LAMA & BARU SEKALIGUS)
+// 2. LOAD DATA KEHADIRAN (HIBRIDA: BISA BACA ARRAY FLAT LAMA & OBJEK TANGGAL-KELAS BARU)
         DB.kehadiran = [];
         if (cloudData.kehadiran) {
-          const ekstrakData = (node) => {
-            if (!node) return;
-            
-            if (Array.isArray(node)) {
-              node.forEach(item => ekstrakData(item));
-            } else if (typeof node === 'object') {
-              // Jika ini objek record absen tunggal (memiliki siswaId atau status)
-              if (node.siswaId || node.idSiswa || node.status) {
-                DB.kehadiran.push(node);
-              } else {
-                // Jika ini objek pembungkus (key tanggal_kelas)
-                Object.values(node).forEach(child => ekstrakData(child));
-              }
-            }
-          };
+          const rawKehadiran = cloudData.kehadiran;
 
-          ekstrakData(cloudData.kehadiran);
+          // JIKA DATA LAMA: Berupa Array [0, 1, 2, 3...]
+          if (Array.isArray(rawKehadiran)) {
+            rawKehadiran.filter(Boolean).forEach(item => {
+              if (typeof item === 'object') {
+                DB.kehadiran.push(item);
+              }
+            });
+          } 
+          // JIKA DATA MIX / BARU: Berupa Objek { "2026-07-20_XII_AKL": { ... }, ... }
+          else if (typeof rawKehadiran === 'object') {
+            Object.keys(rawKehadiran).forEach(key => {
+              const nodeUtama = rawKehadiran[key];
+              if (!nodeUtama) return;
+
+              // Kasus A: Jika node di bawah Key adalah Array daftar siswa
+              if (Array.isArray(nodeUtama)) {
+                nodeUtama.filter(Boolean).forEach(siswaAbsen => {
+                  if (typeof siswaAbsen === 'object') {
+                    // Jika di dalam data siswa belum tercatat tanggal/kelas, tempelkan dari Key
+                    if (!siswaAbsen.tanggal && key.includes('_')) {
+                      siswaAbsen.tanggal = key.split('_')[0];
+                    }
+                    DB.kehadiran.push(siswaAbsen);
+                  }
+                });
+              } 
+              // Kasus B: Jika node di bawah Key adalah Objek kumpulan siswa
+              else if (typeof nodeUtama === 'object') {
+                // Cek jika nodeUtama ini adalah item absen tunggal
+                if (nodeUtama.siswaId || nodeUtama.idSiswa || nodeUtama.status) {
+                  DB.kehadiran.push(nodeUtama);
+                } else {
+                  // Jika ini adalah pembungkus tanggal_kelas, ekstrak semua siswa di dalamnya
+                  Object.values(nodeUtama).filter(Boolean).forEach(siswaAbsen => {
+                    if (typeof siswaAbsen === 'object') {
+                      if (!siswaAbsen.tanggal && key.includes('_')) {
+                        siswaAbsen.tanggal = key.split('_')[0];
+                      }
+                      DB.kehadiran.push(siswaAbsen);
+                    }
+                  });
+                }
+              }
+            });
+          }
         }
 
         // 3. AKUN DEMO
