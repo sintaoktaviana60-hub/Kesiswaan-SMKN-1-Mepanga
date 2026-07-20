@@ -352,7 +352,31 @@ const FirebaseState = {
   }
 
 };
+// Helper universal untuk mengubah respons Firebase (Object/Array) ke Array Murni
+function parseFirebaseData(data) {
+  // Filter siswa agar hanya mengambil data yang benar-benar memiliki Nama
+DB.siswa = safeArray(cloudData.siswa).filter(s => s && (s.nama || s.name));
+  if (!data) return [];
+  
+  // Jika Firebase mengirim Array
+  if (Array.isArray(data)) {
+    return data.filter(item => item !== null && item !== undefined);
+  }
+  
+  // Jika Firebase mengirim Object (misal pakai push ID '-Nx8...' atau index string '0', '1')
+  if (typeof data === 'object') {
+    return Object.keys(data).map(key => {
+      const val = data[key];
+      // Jika di dalam val belum ada id, sisipkan key-nya sebagai id
+      if (typeof val === 'object' && val !== null) {
+        return { id: val.id || key, ...val };
+      }
+      return val;
+    }).filter(Boolean);
+  }
 
+  return [];
+}
 // ==========================================
 // FIREBASE CORE
 // ==========================================
@@ -762,211 +786,131 @@ function muatSemuaDataDariDatabase() {
     console.log("Membuka jalur sinkronisasi aktivitas data Realtime Firebase...");
     
     // Dengarkan aktivitas database Firebase secara langsung
-    targetDb.ref('kesiswaan_cloud').on('value', (snapshot) => {
-      const cloudData = snapshot.val();
-      
-      if (cloudData) {
-        console.log("Aktivitas data dari Firebase Berhasil Diterima!");
-        
-        // Pulihkan data master Guru/Users dari Cloud
-        if (cloudData.users && Array.isArray(cloudData.users)) {
-          DB.users = cloudData.users;
-        } else {
-          DB.users = [];
-        }
+ targetDb.ref('kesiswaan_cloud').on('value', (snapshot) => {
+  const cloudData = snapshot.val();
+  if (cloudData) {
+    console.log("Aktivitas data dari Firebase Berhasil Diterima!");
 
-// ===============================
-// LOAD DATA SISWA
-// ===============================
-if (cloudData.siswa) {
+    // Helper Aman Konversi Firebase -> Array Murni
+    const safeArray = (data) => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data.filter(Boolean);
+      if (typeof data === 'object') return Object.values(data).filter(Boolean);
+      return [];
+    };
 
-    DB.siswa = Array.isArray(cloudData.siswa)
-        ? cloudData.siswa.filter(Boolean)
-        : Object.values(cloudData.siswa);
+    // 1. MUA T DATA MASTER & TRANSAKSI (PASTI ARRAY)
+    DB.users = safeArray(cloudData.users);
+    DB.siswa = safeArray(cloudData.siswa);
+    DB.kelas = safeArray(cloudData.kelas);
+    DB.pelanggaran = safeArray(cloudData.pelanggaran);
+    DB.tatatertib = safeArray(cloudData.tatatertib); // <-- MENCEGAH EROR .find()
+    DB.kelengkapanData = safeArray(cloudData.kelengkapanData);
+    DB.kreditPoin = safeArray(cloudData.kreditPoin);
+    DB.kreditPoinMaster = safeArray(cloudData.kreditPoinMaster);
+    DB.penebusan_poin = safeArray(cloudData.penebusan_poin);
+    DB.riwayatTindakan = safeArray(cloudData.riwayatTindakan);
+    DB.auditLog = safeArray(cloudData.auditLog);
+    DB.identitas = cloudData.identitas || DB.identitas;
+    DB.hariAktif = cloudData.hariAktif || [];
 
-} else {
+    // Log Debugging Siswa
+    if (DB.siswa.length > 0) {
+      console.log("Data siswa terakhir dari Firebase:", DB.siswa[DB.siswa.length - 1]);
+    }
+    console.log("Total DB.siswa =", DB.siswa.length);
 
-    DB.siswa = [];
-
-}
-console.log("Data siswa terakhir dari Firebase:");
-console.log(DB.siswa[524]);
-console.log("Semua key:", Object.keys(DB.siswa[524] || {}));
-// ===============================
-// LOAD DATA KELAS
-// ===============================
-if (cloudData.kelas) {
-
-    DB.kelas = Array.isArray(cloudData.kelas)
-        ? cloudData.kelas.filter(Boolean)
-        : Object.values(cloudData.kelas);
-
-} else {
-
-    DB.kelas = [];
-
-}
-console.log("DB.siswa =", DB.siswa.length);
-
-
-        // Pulihkan data dinamis/transaksi lainnya dari Firebase Cloud
-        if (cloudData.pelanggaran) {
-    DB.pelanggaran = Array.isArray(cloudData.pelanggaran)
-        ? cloudData.pelanggaran.filter(Boolean)
-        : Object.values(cloudData.pelanggaran);
-} else {
-    DB.pelanggaran = [];
-}
-// ===============================
-// LOAD DATA KEHADIRAN (MENDUKUNG ARRAY & OBJECT)
-// ===============================
-DB.kehadiran = [];
-
-if (cloudData.kehadiran) {
-
-    Object.values(cloudData.kehadiran).forEach(kelas => {
-
-        if (Array.isArray(kelas)) {
-            DB.kehadiran.push(...kelas.filter(Boolean));
-        }
-
-    });
-
-} else {
-
+    // 2. LOAD DATA KEHADIRAN (FLATTEN STRUCTURE)
     DB.kehadiran = [];
-
-}
-        if (cloudData.hariAktif) DB.hariAktif = cloudData.hariAktif;
-        if (cloudData.riwayatTindakan) DB.riwayatTindakan = cloudData.riwayatTindakan;
-        if (cloudData.auditLog) DB.auditLog = cloudData.auditLog;
-        if (cloudData.identitas) DB.identitas = cloudData.identitas;
-        if (cloudData.tatatertib) DB.tatatertib = cloudData.tatatertib;
-if (cloudData.kelengkapanData) {
-
-    DB.kelengkapanData = Array.isArray(cloudData.kelengkapanData)
-        ? cloudData.kelengkapanData.filter(Boolean)
-        : Object.values(cloudData.kelengkapanData);
-
-} else {
-
-    DB.kelengkapanData = [];
-
-}
-
-        if (cloudData.kreditPoin)
-          DB.kreditPoin = cloudData.kreditPoin;
-
-        if (cloudData.kreditPoinMaster)
-          DB.kreditPoinMaster = cloudData.kreditPoinMaster;
-
-        // 🟢 SINKRONISASI DATA BARU: PENEBUSAN POIN (REALTIME CLOUD)
-        if (cloudData.penebusan_poin) {
-          DB.penebusan_poin = Object.values(cloudData.penebusan_poin);
-        } else {
-          DB.penebusan_poin = [];
+    if (cloudData.kehadiran) {
+      Object.values(cloudData.kehadiran).forEach(kelas => {
+        if (Array.isArray(kelas)) {
+          DB.kehadiran.push(...kelas.filter(Boolean));
+        } else if (typeof kelas === 'object' && kelas !== null) {
+          DB.kehadiran.push(...Object.values(kelas).filter(Boolean));
         }
+      });
+    }
 
-        if (!DB.hariAktif)
-          DB.hariAktif = [];          
-
-        // Sinkronisasi akumulasi poin siswa
-        if (cloudData.siswaPoinBackup && DB.siswa && DB.siswa.length > 0) {
-          DB.siswa.forEach(s => {
-            const match = cloudData.siswaPoinBackup.find(x => String(x.id) === String(s.id));
-            if (match) {
-              s.poinAbsen = match.poinAbsen || 0;
-              s.poinPelanggaranDasar = match.poinPelanggaranDasar || 0;
-              s.poinPenebusan = match.poinPenebusan || 0; // Tambahkan properti penebusan backup
-              s.poin = match.poin || s.poin;
-            }
-          });
+    // 3. BACKUP POIN SISWA (JIKA ADA)
+    if (cloudData.siswaPoinBackup && DB.siswa.length > 0) {
+      DB.siswa.forEach(s => {
+        const match = cloudData.siswaPoinBackup.find(x => String(x.id) === String(s.id));
+        if (match) {
+          s.poinAbsen = match.poinAbsen || 0;
+          s.poinPelanggaranDasar = match.poinPelanggaranDasar || 0;
+          s.poinPenebusan = match.poinPenebusan || 0;
+          s.poin = match.poin || s.poin;
         }
-      } else {
-        // Jika Firebase benar-benar kosong, inisialisasi array kosong
-        if (!Array.isArray(DB.users)) DB.users = [];
-      }
+      });
+    }
 
-      // SUNTIKAN PENGAMAN: Pastikan akun demo dasar tetap ada di DB.users jika belum terdaftar
+    // 4. AKUN DEMO
+    if (typeof daftarAkunDemo !== 'undefined' && Array.isArray(daftarAkunDemo)) {
       daftarAkunDemo.forEach(akun => {
         if (!DB.users.some(x => x.username === akun.username)) {
           DB.users.push(akun);
         }
       });
-
-      // ===================================================================
-      // 🔥 UTAMA: RUNTIME SINKRONISASI MATEMATIKA ABSEN + PELANGGARAN + PENEBUSAN DI AWAL LOAD
-      // ===================================================================
-      if (DB.siswa && Array.isArray(DB.siswa)) {
-        DB.siswa.forEach(s => {
-          // 1. Ambil seluruh log absen siswa dari DB.kehadiran yang murni dari Firebase
-          const logAbsenSiswa = (DB.kehadiran || []).filter(k => String(k.siswaId) === String(s.id));
-          
-          const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status).trim())).length;
-          const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status).trim())).length;
-          const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).trim())).length;
-
-          // 2. Hitung bobot poin absen bawaan aplikasi Anda: Alpa = 3 Poin, Izin = 1 Poin, Sakit = 0.5 Poin
-          const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
-
-          // 3. Ambil data pelanggaran tata tertib guru
-          let poinTataTertib = 0;
-          if (DB.pelanggaran) {
-            const pelanggaranSiswa = DB.pelanggaran.filter(p => String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id));
-            pelanggaranSiswa.forEach(p => {
-              const tt = DB.tatatertib.find(x => String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId));
-              const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
-              poinTataTertib += poinFinal;
-            });
-          }
-
-          // 🟢 4. Hitung akumulasi poin pemulihan/penebusan khusus yang sudah diselesaikan siswa
-          let totalPoinPenebusan = 0;
-          if (DB.penebusan_poin) {
-            const penebusanSiswa = DB.penebusan_poin.filter(p => String(p.siswaId) === String(s.id));
-            penebusanSiswa.forEach(p => {
-              totalPoinPenebusan += (parseInt(p.poinPemulihan) || 0);
-            });
-          }
-
-          // 5. Masukkan kembali nilai akumulasi baru ini ke objek siswa lokal secara aman tanpa merubah Firebase
-          s.poinPelanggaranDasar = poinTataTertib;
-          s.poinAbsen = poinKetidakhadiran;
-          s.poinPenebusan = totalPoinPenebusan; // Simpan nilai pengurang murni
-          
-          // 🔥 RUMUS BARU: Total Poin = (Pelanggaran + Absen) - Poin Penebusan
-          const totalPoinKotor = poinTataTertib + poinKetidakhadiran;
-          s.poin = Math.max(0, totalPoinKotor - totalPoinPenebusan); // Math.max(0, ...) memastikan poin tidak bernilai minus di bawah nol
-        });
-      }
-
- // Halaman yang sedang input TIDAK BOLEH dirender ulang
-const halamanInput = [
-    "input-pelanggaran",
-    "kehadiran",
-    "input-kredit-poin",
-    "admin-kredit-poin", // Menahan refresh untuk pengelolaan kredit poin admin
-    "bimbingan-kesiswaan",
-    "input-data-pelajar" // Menahan refresh saat melengkapi data pelajar/siswa
-];
-
-if (
-    typeof renderPage === "function" &&
-    currentPage &&
-    !halamanInput.includes(currentPage)
-) {
-    renderPage(currentPage);
-}
-    });
-    
-  } else {
-    console.error("Firebase tidak siap atau tidak terdeteksi di window browser.");
-    if (!Array.isArray(DB.users)) DB.users = [...daftarAkunDemo];
-    if (typeof renderPage === 'function' && currentPage) {
-      renderPage(currentPage);
     }
+
+    // 5. KALKULASI MATEMATIKA REALTIME
+    if (DB.siswa.length > 0) {
+      DB.siswa.forEach(s => {
+        // Log Absensi
+        const logAbsenSiswa = DB.kehadiran.filter(k => k && String(k.siswaId) === String(s.id));
+        const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status).trim())).length;
+        const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status).trim())).length;
+        const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).trim())).length;
+        const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
+
+        // Pelanggaran Tata Tertib
+        let poinTataTertib = 0;
+        const pelanggaranSiswa = DB.pelanggaran.filter(p => p && (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)));
+        pelanggaranSiswa.forEach(p => {
+          // Aman karena DB.tatatertib dijamin Array Murni
+          const tt = DB.tatatertib.find(x => x && (String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId)));
+          const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
+          poinTataTertib += poinFinal;
+        });
+
+        // Penebusan Poin
+        let totalPoinPenebusan = 0;
+        const penebusanSiswa = DB.penebusan_poin.filter(p => p && String(p.siswaId) === String(s.id));
+        penebusanSiswa.forEach(p => {
+          totalPoinPenebusan += (parseInt(p.poinPemulihan) || 0);
+        });
+
+        // Set Nilai Akhir Siswa
+        s.poinPelanggaranDasar = poinTataTertib;
+        s.poinAbsen = poinKetidakhadiran;
+        s.poinPenebusan = totalPoinPenebusan;
+        const totalPoinKotor = poinTataTertib + poinKetidakhadiran;
+        s.poin = Math.max(0, totalPoinKotor - totalPoinPenebusan);
+      });
+    }
+
+    // 6. RENDER HALAMAN (SAFE TRIGGER)
+    const halamanInput = [
+      "input-pelanggaran",
+      "kehadiran",
+      "input-kredit-poin",
+      "admin-kredit-poin",
+      "bimbingan-kesiswaan",
+      "input-data-pelajar"
+    ];
+
+    const activePage = currentPage || 'dashboard';
+    if (typeof renderPage === "function" && !halamanInput.includes(activePage)) {
+      renderPage(activePage);
+    }
+
+  } else {
+    // Jika Cloud Kosong
+    if (!Array.isArray(DB.users)) DB.users = typeof daftarAkunDemo !== 'undefined' ? [...daftarAkunDemo] : [];
+    if (typeof renderPage === 'function') renderPage(currentPage || 'dashboard');
   }
-}
+})}}
 
 
 let currentUser = null;
@@ -1276,10 +1220,13 @@ window.addEventListener('resize', () => {
 
 // ===== RENDER PAGES =====
     function renderPage(page) {
+      // 1. KRUSIAL: Update variabel state global currentPage
+      currentPage = page || 'dashboard';
+
       const mc = document.getElementById('mainContent');
       if (!mc) return;
 
-      destroyCharts();
+      if (typeof destroyCharts === 'function') destroyCharts();
 
       // Amankan interval/timer dashboard agar tidak menginterupsi menu lain
       if (window.dashboardInterval) {
@@ -1287,6 +1234,7 @@ window.addEventListener('resize', () => {
         window.dashboardInterval = null;
       }
 
+      // Daftar Judul Halaman Lengkap
       const titles = {
         'dashboard': 'Dashboard',
         'admin-kelas': 'Kelola Kelas',
@@ -1295,21 +1243,32 @@ window.addEventListener('resize', () => {
         'catatan-pelanggaran': 'Catatan Pelanggaran',
         'admin-guru': 'Kelola Guru',
         'admin-siswa': 'Kelola Siswa',
+        'admin-backup': 'Backup Data',
         'admin-sekretaris': 'Kelola Sekretaris',
         'admin-identitas': 'Identitas Sekolah',
+        'admin-tatatertib': 'Kelola Tata Tertib',
+        'admin-kredit-poin': 'Kelola Kredit Poin',
         'audit-log': 'Audit Log',
+        'input-data-pelajar': 'Input Data Pelajar',
+        'cetak-kartu-pelajar': 'Cetak Kartu Pelajar',
         'input-pelanggaran': 'Input Pelanggaran',
+        'input-kredit-poin': 'Input Kredit Poin',
         'rekap-pelanggaran-guru': 'Rekapitulasi Pelanggaran',
+        'rekap-kredit-poin': 'Rekap Kredit Poin',
+        'bimbingan-kesiswaan': 'Bimbingan Kesiswaan',
         'kehadiran': 'Input Kehadiran',
         'statistik-kehadiran': 'Statistik Kesiswaan',
         'rekap-ketidakhadiran-sekre': 'Rekap Ketidakhadiran',
         'walas-siswa-kelas': 'Daftar Siswa Kelas'
       };
 
-      document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
+      const titleEl = document.getElementById('pageTitle');
+      if (titleEl) {
+        titleEl.textContent = titles[currentPage] || 'Dashboard';
+      }
 
       // SAKLAR SELEKSI HALAMAN UTAMA (SWITCH CASE)
-      switch (page) {
+      switch (currentPage) {
         case 'dashboard':
           renderDashboardKesiswaanBaru();
           break;
@@ -1375,7 +1334,7 @@ window.addEventListener('resize', () => {
           break;
         case 'statistik-kehadiran':
           renderHalamanStatistikKehadiran();
-        break;
+          break;
         case 'rekap-ketidakhadiran-sekre':
           renderRekapKetidakhadiranSekre();
           break;
@@ -1387,87 +1346,105 @@ window.addEventListener('resize', () => {
           }
           break;
         default:
-          mc.innerHTML = '<p class="p-4 text-gray-500">Halaman tidak ditemukan</p>';
+          renderDashboardKesiswaanBaru(); // Fallback otomatis render Dashboard jika halaman tidak dikenal
       }
 
       // =========================================================================
       // PENGHAPUS OTOMATIS: Menyingkirkan Tombol "Menu Utama" & "Daftar Siswa Kelas"
-      // dari bagian atas konten utama secara absolut di seluruh halaman & seluruh akun.
       // =========================================================================
       setTimeout(() => {
         const semuaTombol = mc.querySelectorAll('button');
         semuaTombol.forEach(btn => {
           const teksTombol = btn.textContent.trim().toLowerCase();
           if (teksTombol === 'menu utama' || teksTombol === 'daftar siswa kelas') {
-            btn.remove(); // Hapus tombol secara permanen dari layar
+            btn.remove();
           }
         });
       }, 10);
 
-      lucide.createIcons();
-    }
-
-    // ===== DASHBOARD =====
-    function filterGuruPel() {
-      const kelas = document.getElementById('fKelasGP').value;
-      const search = document.getElementById('searchGP').value.toLowerCase();
-
-      let data = DB.pelanggaran.filter(p => p.guru === currentUser.name).map(p => {
-        // Ambil data siswa berdasarkan ID
-        const s = DB.siswa.find(x => String(x.id) === String(p.siswaId) || String(x.id) === String(p.idSiswa));
-
-        // Cari master tata tertib jika ada kodenya
-        const tt = DB.tatatertib.find(x => String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId));
-
-        // PERBAIKAN: Jika tata tertib tidak ditemukan (tt == null), jangan dibuang (null).
-        // Tetap masukkan ke dashboard, ambil teks pelanggaran dan nilai poin yang diketik manual oleh guru.
-        return s ? {
-          nama: s.nama,
-          nisn: s.nisn,
-          kelas: s.kelas,
-          tanggal: p.tanggal || '-',
-          jenis: tt ? (tt.deskripsi || tt.jenis) : (p.jenisLog || p.pelanggaran || 'Pelanggaran Manual Guru'),
-          poin: tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0)
-        } : null;
-      }).filter(Boolean);
-
-      if (kelas) data = data.filter(d => d.kelas === kelas);
-      if (search) data = data.filter(d => d.nama.toLowerCase().includes(search));
-
-      // Cetak ke tabel rekap guru
-      document.getElementById('bodyGuruPel').innerHTML = data.map(d => `
-    <tr class="border-t dark:border-gray-700/50 hover:bg-gray-50/50">
-      <td class="py-3 px-4 font-semibold text-gray-900 dark:text-white">${d.nama}</td>
-      <td class="py-3 px-4">${d.nisn}</td>
-      <td class="py-3 px-4"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs">${d.kelas}</span></td>
-      <td class="py-3 px-4">${d.tanggal}</td>
-      <td class="py-3 px-4 text-gray-600 dark:text-gray-300">${d.jenis}</td>
-      <td class="py-3 px-4">
-        <span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-bold">+${d.poin} Poin</span>
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="6" class="py-8 text-center text-gray-400 italic">Tidak ada data pelanggaran</td></tr>';
-
-      // Sinkronisasikan otomatis ke akumulasi dashboard utama tiap kali dipanggil
-      if (typeof hitungUlangPoinDashboard === "function") {
-        hitungUlangPoinDashboard();
+      if (window.lucide) {
+        lucide.createIcons();
       }
     }
 
-    // ===== REKAP PELANGGARAN =====
-    // ===================================================================
-    // KODE PERBAIKAN REKAP PELANGGARAN & ABSENSI INTEGRATED
-    // ===================================================================
+    // ===== DASHBOARD =====
+// ===================================================================
+// 1. FUNGSI FILTER REKAP PELANGGARAN KHUSUS GURU PELAPOR
+// ===================================================================
+function filterGuruPel() {
+  const elKelas = document.getElementById('fKelasGP');
+  const elSearch = document.getElementById('searchGP');
 
+  const kelas = elKelas ? elKelas.value : '';
+  const search = elSearch ? elSearch.value.toLowerCase().trim() : '';
+
+  // Filter log pelanggaran murni milik guru yang sedang login
+  let data = (DB.pelanggaran || [])
+    .filter(p => p && p.guru === (currentUser ? currentUser.name : ''))
+    .map(p => {
+      // Ambil data siswa berbasis ID (String/Number) atau Nama
+      const s = (DB.siswa || []).find(x => x && (
+        String(x.id) === String(p.siswaId) || 
+        String(x.id) === String(p.idSiswa) ||
+        (x.nama && p.namaSiswa && x.nama.trim().toLowerCase() === p.namaSiswa.trim().toLowerCase())
+      ));
+
+      // Cari master tata tertib
+      const tt = (DB.tatatertib || []).find(x => x && (
+        String(x.id) === String(p.jenisId) || 
+        String(x.kode) === String(p.jenisId) || 
+        String(x.id) === String(p.tatatertibId)
+      ));
+
+      return s ? {
+        nama: s.nama || s.name || '-',
+        nisn: s.nisn || '-',
+        kelas: s.kelas || '-',
+        tanggal: p.tanggal || '-',
+        jenis: tt ? (tt.deskripsi || tt.jenis || tt.nama) : (p.jenisLog || p.pelanggaran || 'Pelanggaran Manual Guru'),
+        poin: tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0)
+      } : null;
+    })
+    .filter(Boolean);
+
+  if (kelas) data = data.filter(d => d.kelas === kelas);
+  if (search) data = data.filter(d => d.nama.toLowerCase().includes(search));
+
+  const elBody = document.getElementById('bodyGuruPel');
+  if (elBody) {
+    elBody.innerHTML = data.map(d => `
+      <tr class="border-t dark:border-gray-700/50 hover:bg-gray-50/50">
+        <td class="py-3 px-4 font-semibold text-gray-900 dark:text-white">${d.nama}</td>
+        <td class="py-3 px-4">${d.nisn}</td>
+        <td class="py-3 px-4"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs">${d.kelas}</span></td>
+        <td class="py-3 px-4">${d.tanggal}</td>
+        <td class="py-3 px-4 text-gray-600 dark:text-gray-300">${d.jenis}</td>
+        <td class="py-3 px-4">
+          <span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-bold">+${d.poin} Poin</span>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="py-8 text-center text-gray-400 italic">Tidak ada data pelanggaran</td></tr>';
+  }
+
+  // Sinkronisasikan otomatis ke akumulasi poin dashboard utama
+  if (typeof hitungUlangPoinDashboard === "function") {
+    hitungUlangPoinDashboard();
+  }
+}
+
+// ===================================================================
+// 2. FUNGSI RENDER HALAMAN UTAMA REKAP PELANGGARAN
+// ===================================================================
 function renderRekapPelanggaran() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
 
-  // 1. Dapatkan daftar kelas unik untuk filter dropdown
-  const daftarKelas = [...new Set((DB.siswa || []).map(s => s.kelas))].sort();
+  // Dapatkan daftar kelas unik untuk filter dropdown
+  const daftarKelas = [...new Set((DB.siswa || []).map(s => s && s.kelas).filter(Boolean))].sort();
 
   mc.innerHTML = `
     <div class="fade-in space-y-6">
+      <!-- HEADER & FILTER -->
       <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 class="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
@@ -1493,6 +1470,7 @@ function renderRekapPelanggaran() {
         </div>
       </div>
 
+      <!-- TABEL REKAPITULASI -->
       <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
@@ -1508,12 +1486,13 @@ function renderRekapPelanggaran() {
               </tr>
             </thead>
             <tbody id="bodyRekapPelanggaranSiswa" class="divide-y divide-gray-100 dark:divide-gray-700/50 text-sm">
-              </tbody>
+            </tbody>
           </table>
         </div>
       </div>
     </div>
 
+    <!-- MODAL DETAIL RIWAYAT SISWA -->
     <div id="modalDetailSiswa" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] fade-in">
         <div class="p-6 border-b dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-700/30">
@@ -1534,11 +1513,10 @@ function renderRekapPelanggaran() {
                 <th class="p-3">Jenis Pelanggaran / Aturan</th>
                 <th class="p-3 text-center w-20">Poin</th>
                 <th class="p-3">Guru Pelapor</th>
-                <th class="p-3 text-center w-24">Aksi</th>
               </tr>
             </thead>
             <tbody id="bodyDetailPelanggaranSiswa" class="divide-y divide-gray-100 dark:divide-gray-700">
-              </tbody>
+            </tbody>
           </table>
         </div>
         <div class="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/20 flex justify-end">
@@ -1550,48 +1528,70 @@ function renderRekapPelanggaran() {
     </div>
   `;
 
-  lucide.createIcons();
-  jalankanFilterRekapSiswa(); // Panggil pengolahan data awal
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+  jalankanFilterRekapSiswa();
 }
 
+// ===================================================================
+// 3. FUNGSI FILTER & KALKULASI REKAP SISWA
+// ===================================================================
 function jalankanFilterRekapSiswa() {
-  const filterKelas = document.getElementById('filterKelasRekap').value;
-  const kataKunci = document.getElementById('searchSiswaRekap').value.toLowerCase().trim();
+  const elKelas = document.getElementById('filterKelasRekap');
+  const elSearch = document.getElementById('searchSiswaRekap');
 
-  // 1. Proses kompilasi data pelanggaran per siswa
+  const filterKelas = elKelas ? elKelas.value : '';
+  const kataKunci = elSearch ? elSearch.value.toLowerCase().trim() : '';
+
   let rekapSiswa = (DB.siswa || []).map(s => {
+    if (!s) return null;
+
+    const namaSiswaAsli = String(s.nama || s.name || "").trim().toLowerCase();
+
+    // Filter list pelanggaran milik siswa ini
     const listPelanggaran = (DB.pelanggaran || []).filter(p => {
-      return String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id);
+      if (!p) return false;
+      const matchId = (p.siswaId && String(p.siswaId) === String(s.id)) || (p.idSiswa && String(p.idSiswa) === String(s.id));
+      const namaPelanggaran = String(p.namaSiswa || p.nama || p.nama_siswa || "").trim().toLowerCase();
+      const matchNama = namaSiswaAsli !== "" && namaPelanggaran === namaSiswaAsli;
+      return matchId || matchNama;
     });
 
     let totalPoin = 0;
     listPelanggaran.forEach(p => {
-      const tt = DB.tatatertib.find(x => String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId));
+      const tt = (DB.tatatertib || []).find(x => x && (
+        String(x.id) === String(p.jenisId) || 
+        String(x.kode) === String(p.jenisId) || 
+        String(x.id) === String(p.tatatertibId)
+      ));
       const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
       totalPoin += poinFinal;
     });
 
     return {
       id: s.id,
-      nama: s.nama,
+      nama: s.nama || s.name || 'Tanpa Nama',
       nisn: s.nisn || '-',
-      kelas: s.kelas,
+      kelas: s.kelas || '-',
       jumlahKasus: listPelanggaran.length,
       totalPoin: totalPoin
     };
-  });
+  }).filter(Boolean);
 
   if (filterKelas) {
     rekapSiswa = rekapSiswa.filter(r => r.kelas === filterKelas);
   }
 
   if (kataKunci) {
-    rekapSiswa = rekapSiswa.filter(r => r.nama.toLowerCase().includes(kataKunci) || r.nisn.includes(kataKunci));
+    rekapSiswa = rekapSiswa.filter(r => r.nama.toLowerCase().includes(kataKunci) || String(r.nisn).includes(kataKunci));
   }
 
   rekapSiswa.sort((a, b) => b.totalPoin - a.totalPoin);
 
   const tbody = document.getElementById('bodyRekapPelanggaranSiswa');
+  if (!tbody) return;
+
   if (rekapSiswa.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-gray-400 italic">Tidak ada data rekapitulasi siswa yang sesuai filter.</td></tr>`;
     return;
@@ -1612,7 +1612,7 @@ function jalankanFilterRekapSiswa() {
         <td class="py-3.5 px-6 text-center ${warnaPoin}">${r.totalPoin} Pts</td>
         <td class="py-3.5 px-6 text-center">
           <button onclick="lihatDetailPelanggaranSiswa('${r.id}')" 
-            class="px-3 py-1.5 bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/30 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 text-xs font-semibold rounded-xl transition flex items-center gap-1 mx-auto">
+            class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl transition flex items-center gap-1 mx-auto">
             🔍 Detail
           </button>
         </td>
@@ -1621,72 +1621,64 @@ function jalankanFilterRekapSiswa() {
   }).join('');
 }
 
+// ===================================================================
+// 4. FUNGSI MODAL DETAIL RIWAYAT SISWA
+// ===================================================================
 function lihatDetailPelanggaranSiswa(siswaId) {
-  const s = DB.siswa.find(x => String(x.id) === String(siswaId));
-  if (!s) return;
+  const siswa = (DB.siswa || []).find(s => s && String(s.id) === String(siswaId));
+  if (!siswa) return;
+
+  const modal = document.getElementById('modalDetailSiswa');
+  const elNama = document.getElementById('modalNamaSiswa');
+  const elInfo = document.getElementById('modalInfoSiswa');
+  const tbody = document.getElementById('bodyDetailPelanggaranSiswa');
+
+  if (elNama) elNama.textContent = `Detail Riwayat: ${siswa.nama || siswa.name}`;
+  if (elInfo) elInfo.textContent = `NISN: ${siswa.nisn || '-'} | Kelas: ${siswa.kelas || '-'}`;
+
+  const namaSiswaAsli = String(siswa.nama || siswa.name || "").trim().toLowerCase();
 
   const listPelanggaran = (DB.pelanggaran || []).filter(p => {
-    return String(p.siswaId) === String(siswaId) || String(p.idSiswa) === String(siswaId);
+    if (!p) return false;
+    const matchId = (p.siswaId && String(p.siswaId) === String(siswa.id)) || (p.idSiswa && String(p.idSiswa) === String(siswa.id));
+    const namaPelanggaran = String(p.namaSiswa || p.nama || p.nama_siswa || "").trim().toLowerCase();
+    const matchNama = namaSiswaAsli !== "" && namaPelanggaran === namaSiswaAsli;
+    return matchId || matchNama;
   });
 
-  document.getElementById('modalNamaSiswa').textContent = `Riwayat Pelanggaran: ${s.nama}`;
-  document.getElementById('modalInfoSiswa').textContent = `Kelas: ${s.kelas} | NISN: ${s.nisn || '-'}`;
+  if (tbody) {
+    if (listPelanggaran.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400 italic">Belum ada catatan pelanggaran untuk siswa ini.</td></tr>`;
+    } else {
+      tbody.innerHTML = listPelanggaran.map((p, idx) => {
+        const tt = (DB.tatatertib || []).find(x => x && (
+          String(x.id) === String(p.jenisId) || 
+          String(x.kode) === String(p.jenisId) || 
+          String(x.id) === String(p.tatatertibId)
+        ));
 
-  const tbodyDetail = document.getElementById('bodyDetailPelanggaranSiswa');
-  if (listPelanggaran.length === 0) {
-    tbodyDetail.innerHTML = `<tr><td colspan="5" class="p-4 text-center italic text-gray-400">Anak ini belum memiliki catatan pelanggaran resmi.</td></tr>`;
-  } else {
-    tbodyDetail.innerHTML = listPelanggaran.map((p, index) => {
-      const tt = DB.tatatertib.find(x => String(x.id) === String(p.jenisId) || String(x.kode) === String(p.jenisId) || String(x.id) === String(p.tatatertibId));
-      const deskripsiFinal = tt ? (tt.deskripsi || tt.jenis) : (p.jenisLog || p.pelanggaran || p.keterangan || 'Pelanggaran Manual');
-      const poinFinal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || 0);
-      
-      return `
-        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+        const jenisText = tt ? (tt.deskripsi || tt.jenis || tt.nama) : (p.jenisLog || p.pelanggaran || 'Pelanggaran Manual');
+        const poinVal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
 
-        <td class="p-3 text-center text-gray-400">
-        ${index+1}
-        </td>
-
-        <td class="p-3">
-        ${p.tanggal || "-"}
-        </td>
-
-        <td class="p-3 font-medium">
-        ${deskripsiFinal}
-        </td>
-
-        <td class="p-3 text-center text-red-500 font-bold">
-        ${poinFinal}
-        </td>
-
-        <td class="p-3">
-        ${p.guru || p.petugas || "Sistem"}
-        </td>
-
-        <td class="p-3 text-center">
-
-        <button
-        onclick="hapusPelanggaranAdmin('${p.id}','${s.nama}')"
-        class="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs">
-
-        🗑 Hapus
-
-        </button>
-
-        </td>
-
-        </tr>
+        return `
+          <tr class="border-b dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
+            <td class="p-3 text-center text-gray-400 font-mono">${idx + 1}</td>
+            <td class="p-3 text-gray-700 dark:text-gray-300 font-medium">${p.tanggal || '-'}</td>
+            <td class="p-3 text-gray-800 dark:text-white font-semibold">${jenisText}</td>
+            <td class="p-3 text-center font-bold text-red-600 dark:text-red-400">+${poinVal}</td>
+            <td class="p-3 text-gray-500 dark:text-gray-400 text-xs">${p.guru || p.namaGuru || 'Sistem'}</td>
+          </tr>
         `;
-
-    }).join('');
+      }).join('');
+    }
   }
 
-  document.getElementById('modalDetailSiswa').classList.remove('hidden');
+  if (modal) modal.classList.remove('hidden');
 }
 
 function tutupModalDetailSiswa() {
-  document.getElementById('modalDetailSiswa').classList.add('hidden');
+  const modal = document.getElementById('modalDetailSiswa');
+  if (modal) modal.classList.add('hidden');
 }
 
 // ==========================================
@@ -6786,70 +6778,53 @@ function renderDashboardKesiswaanBaru() {
 
       // 1. Hitung data statistik dasar
       const totalSiswa = DB.siswa ? DB.siswa.length : 0;
-      const totalGuru = DB.users ? DB.users.filter(u => u.role === 'guru').length : 0;
+      const totalGuru = DB.users ? DB.users.filter(u => u && u.role === 'guru').length : 0;
       const totalKelas = DB.kelas ? DB.kelas.length : 0;
 
       // Ambil total kehadiran khusus hari ini
       const tglHariIni = new Date().toISOString().split('T')[0];
-      const absenHariIni = (DB.kehadiran || []).filter(k => k.tanggal === tglHariIni);
-      const jmlAlpa = absenHariIni.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).toLowerCase())).length;
+      const absenHariIni = (DB.kehadiran || []).filter(k => k && k.tanggal === tglHariIni);
+      const jmlAlpa = absenHariIni.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status || "").trim())).length;
       const totalKelasHariIni = (DB.kelas || []).length;
 
-let kelasSudahAbsen = 0;
+      let kelasSudahAbsen = 0;
 
-(DB.kelas || []).forEach(kelas => {
+      (DB.kelas || []).forEach(kelas => {
+          const sudah = (DB.kehadiran || []).some(k => {
+              if (!k || k.tanggal !== tglHariIni) return false;
+              const siswa = (DB.siswa || []).find(x => x && String(x.id) === String(k.siswaId));
+              return siswa && siswa.kelas === kelas;
+          });
+          if (sudah) kelasSudahAbsen++;
+      });
 
-    const sudah = (DB.kehadiran || []).some(k => {
+      const persenAbsen = totalKelasHariIni === 0
+          ? 0
+          : Math.round((kelasSudahAbsen / totalKelasHariIni) * 100);
 
-        if (k.tanggal !== tglHariIni) return false;
-
-        const siswa = DB.siswa.find(x => String(x.id) === String(k.siswaId));
-
-        return siswa && siswa.kelas === kelas;
-
-    });
-
-    if (sudah) kelasSudahAbsen++;
-
-});
-
-const persenAbsen = totalKelasHariIni === 0
-    ? 0
-    : Math.round((kelasSudahAbsen / totalKelasHariIni) * 100);
       const jmlSakit = absenHariIni.filter(k =>
-          ["sakit","s"].includes(String(k.status).toLowerCase())
+          ["sakit", "s"].includes(String(k.status || "").trim().toLowerCase())
       ).length;
 
       const jmlIzin = absenHariIni.filter(k =>
-          ["izin","i"].includes(String(k.status).toLowerCase())
+          ["izin", "i"].includes(String(k.status || "").trim().toLowerCase())
       ).length;
 
       const kelasBelumAbsen = [];
 
-      (DB.kelas || []).forEach(kelas=>{
+      (DB.kelas || []).forEach(kelas => {
+          const siswaKelas = (DB.siswa || []).filter(s => s && s.kelas === kelas);
+          if (siswaKelas.length === 0) return;
 
-          const siswaKelas=(DB.siswa||[])
-              .filter(s=>s.kelas===kelas);
+          const sudahAbsen = (DB.kehadiran || []).some(k => {
+              if (!k || k.tanggal !== tglHariIni) return false;
+              const siswa = (DB.siswa || []).find(x => x && String(x.id) === String(k.siswaId));
+              return siswa && siswa.kelas === kelas;
+          });
 
-          if(siswaKelas.length===0) return;
-
-          const sudahAbsen=(DB.kehadiran||[])
-              .some(k=>{
-
-                  if(k.tanggal!==tglHariIni) return false;
-
-                  const siswa=DB.siswa.find(x=>String(x.id)===String(k.siswaId));
-
-                  return siswa && siswa.kelas===kelas;
-
-              });
-
-          if(!sudahAbsen){
-
+          if (!sudahAbsen) {
               kelasBelumAbsen.push(kelas);
-
           }
-
       });
 
       // Array Kelompok Atas: Ambang Batas Poin Gabungan
@@ -6867,96 +6842,87 @@ const persenAbsen = totalKelasHariIni === 0
 
       // Hitung akumulasi poin dan alpa untuk setiap siswa
       (DB.siswa || []).forEach(s => {
+        if (!s) return; // Mencegah error jika elemen array null
 
-        // --- AMBIL DATA PELANGGARAN GURU (Pencocokan berbasis ID atau Nama) ---
+        const namaSiswaAsli = String(s.nama || s.name || "").trim().toLowerCase();
+
+        // --- AMBIL DATA PELANGGARAN GURU ---
         const logPelanggaranGuru = (DB.pelanggaran || []).filter(p => {
+          if (!p) return false;
           const matchId = (p.siswaId && String(p.siswaId) === String(s.id)) || (p.idSiswa && String(p.idSiswa) === String(s.id));
-          const namaPelanggaran = p.namaSiswa || p.nama || p.nama_siswa || "";
-if (!s || !s.nama) {
-    console.log("Siswa bermasalah:", s);
-}
-const matchNama =
-    String(namaPelanggaran || "").trim().toLowerCase() ===
-    String(s?.nama || "").trim().toLowerCase();
+          const namaPelanggaran = String(p.namaSiswa || p.nama || p.nama_siswa || "").trim().toLowerCase();
+          const matchNama = namaSiswaAsli !== "" && namaPelanggaran === namaSiswaAsli;
           return matchId || matchNama;
         });
 
-        // [PERBAIKAN UTAMA] Ambil nilai bobot poin dari master kriteria tata tertib
+        // Ambil nilai bobot poin dari master kriteria tata tertib
         const poinTataTertib = logPelanggaranGuru.reduce((total, item) => {
           const idKriteria = item.jenisId || item.tatatertibId || "";
-const kriteriaMaster = (DB.tatatertib || []).find(x => {
+          const kriteriaMaster = (DB.tatatertib || []).find(x => {
+            if (!x) return false;
+            const id = String(x.id || "").trim();
+            const kode = String(x.kode || "").trim();
+            const jenis = String(idKriteria || "").trim();
+            return id === jenis || kode === jenis;
+          });
 
-    if (!x) return false;
-
-    const id = String(x.id || "").trim();
-    const kode = String(x.kode || "").trim();
-    const jenis = String(idKriteria || "").trim();
-
-    return id === jenis || kode === jenis;
-
-});
-
-          // Ambil dari master kriteria, jika tidak ada baru ambil dari properti log bawaan guru
           const nilaiPoin = kriteriaMaster ? parseInt(kriteriaMaster.poin) : (parseInt(item.poin) || parseInt(item.skor) || 0);
           return total + (nilaiPoin || 0);
         }, 0);
 
-        // --- AMBIL DATA KETIDAKHADIRAN SEKRETARIS (Pencocokan berbasis ID atau Nama) ---
+        // --- AMBIL DATA KETIDAKHADIRAN SEKRETARIS (DENGAN SAFE STRING) ---
         const logAbsenSiswa = (DB.kehadiran || []).filter(k => {
+          if (!k) return false;
           const matchId = k.siswaId && String(k.siswaId) === String(s.id);
-          const namaAbsen = k.namaSiswa || k.nama || k.nama_siswa || "";
-          const matchNama = namaAbsen.trim().toLowerCase() === s.nama.trim().toLowerCase();
+          const namaAbsen = String(k.namaSiswa || k.nama || k.nama_siswa || "").trim().toLowerCase();
+          const matchNama = namaSiswaAsli !== "" && namaAbsen === namaSiswaAsli;
           return matchId || matchNama;
         });
 
-        const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status))).length;
-        const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status))).length;
-        const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status))).length;
+        const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status || "").trim())).length;
+        const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status || "").trim())).length;
+        const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status || "").trim())).length;
 
         // Hitung bobot poin absen: Alpa = 3 Poin, Izin = 1 Poin, Sakit = 0.5 Poin
         const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
 
-        // TOTAL MERGE REAL-TIME (TATA TERTIB GURU + ABSEN SEKRETARIS)
+        // TOTAL MERGE REAL-TIME
         const totalPoinGabungan = poinTataTertib + poinKetidakhadiran;
 
-        // Masukkan kembali nilai akumulasi baru ini ke objek siswa asli agar dibaca komponen lain
         s.poinPelanggaranDasar = poinTataTertib;
         s.poinAbsen = poinKetidakhadiran;
         s.poin = totalPoinGabungan;
 
+        const namaDisplay = s.nama || s.name || 'Tanpa Nama';
+
         // Alokasikan siswa ke box monitoring poin bagian atas
         if (totalPoinGabungan >= 100) {
-          p100.push({ nama: s.nama, kelas: s.kelas || '-', total: totalPoinGabungan });
+          p100.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         } else if (totalPoinGabungan >= 75) {
-          p75.push({ nama: s.nama, kelas: s.kelas || '-', total: totalPoinGabungan });
+          p75.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         } else if (totalPoinGabungan >= 50) {
-          p50.push({ nama: s.nama, kelas: s.kelas || '-', total: totalPoinGabungan });
+          p50.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         } else if (totalPoinGabungan >= 25) {
-          p25.push({ nama: s.nama, kelas: s.kelas || '-', total: totalPoinGabungan });
+          p25.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         } else if (totalPoinGabungan >= 15) {
-          p15.push({ nama: s.nama, kelas: s.kelas || '-', total: totalPoinGabungan });
+          p15.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         }
 
         // Alokasikan siswa ke box monitoring hari alpa bagian bawah
         if (alp >= 30) {
-          alpa30Hari.push({ nama: s.nama, kelas: s.kelas || '-', total: alp });
+          alpa30Hari.push({ nama: namaDisplay, kelas: s.kelas || '-', total: alp });
         } else if (alp >= 15) {
-          alpa15Hari.push({ nama: s.nama, kelas: s.kelas || '-', total: alp });
+          alpa15Hari.push({ nama: namaDisplay, kelas: s.kelas || '-', total: alp });
         } else if (alp >= 7) {
-          alpa7Hari.push({ nama: s.nama, kelas: s.kelas || '-', total: alp });
+          alpa7Hari.push({ nama: namaDisplay, kelas: s.kelas || '-', total: alp });
         } else if (alp >= 3) {
-          alpa3Hari.push({ nama: s.nama, kelas: s.kelas || '-', total: alp });
+          alpa3Hari.push({ nama: namaDisplay, kelas: s.kelas || '-', total: alp });
         }
       });
 
-      //UJI COBA DASHBORD DIGANTI RUMUSNYA  
-      if (DB.siswa && DB.siswa.length > 0) {
-          console.log("Poin siswa berhasil dihitung");
-        }
-
       // Fungsi pembantu render baris tabel
       const buatBarisTabelDashboard = (daftarSiswa, jenis) => {
-        if (daftarSiswa.length === 0) {
+        if (!daftarSiswa || daftarSiswa.length === 0) {
           return `<tr><td colspan="3" class="py-3 text-center text-gray-400 dark:text-gray-500 italic text-xs">Tidak ada siswa</td></tr>`;
         }
         return daftarSiswa.map((m, idx) => `
@@ -6970,12 +6936,10 @@ const kriteriaMaster = (DB.tatatertib || []).find(x => {
         `).join('');
       };
 
-// Render HTML Utama Dashboard - PREMIUM MODERN ULTIMATE DESIGN
+      // Render HTML Utama Dashboard
       mc.innerHTML = `
     <div class="fade-in space-y-8 p-1">
-      
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        
         <div class="group bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-800 dark:to-gray-800/50 p-6 rounded-[24px] border border-gray-100 dark:border-gray-700/60 shadow-sm flex items-center gap-5 transition-all duration-500 hover:shadow-[0_20px_30px_-10px_rgba(59,130,246,0.15)] hover:-translate-y-1.5 relative overflow-hidden">
           <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-all duration-500"></div>
           <div class="p-4 rounded-2xl bg-blue-500 text-white shadow-lg shadow-blue-500/20 dark:shadow-none transition-transform duration-500 group-hover:scale-110">
@@ -7028,7 +6992,6 @@ const kriteriaMaster = (DB.tatatertib || []).find(x => {
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-        
         <div class="bg-white dark:bg-gray-800 p-5 rounded-[22px] border border-gray-100 dark:border-gray-700/50 shadow-sm flex items-center justify-between relative overflow-hidden group">
           <div class="absolute left-0 top-0 bottom-0 w-[5px] bg-emerald-500"></div>
           <div class="pl-2">
@@ -7074,8 +7037,7 @@ const kriteriaMaster = (DB.tatatertib || []).find(x => {
         </div>
       </div>
 
-
-<div class="pt-2">
+      <div class="pt-2">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-700/50">
            <div class="flex items-center gap-3">
              <div class="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -7197,8 +7159,11 @@ const kriteriaMaster = (DB.tatatertib || []).find(x => {
         </div>
       </div>
   `;
-      lucide.createIcons();
-    }
+
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+}
 
     function filterAdminPel() {
       const kelas = document.getElementById('fKelasAdmin').value;
