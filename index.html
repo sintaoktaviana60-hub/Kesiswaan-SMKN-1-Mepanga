@@ -813,15 +813,26 @@ function muatSemuaDataDariDatabase() {
         DB.hariAktif = cloudData.hariAktif || [];
 
         // 2. LOAD DATA KEHADIRAN
+// 2. LOAD DATA KEHADIRAN (BISA BACA STRUKTUR LAMA & BARU SEKALIGUS)
         DB.kehadiran = [];
         if (cloudData.kehadiran) {
-          Object.values(cloudData.kehadiran).forEach(kelas => {
-            if (Array.isArray(kelas)) {
-              DB.kehadiran.push(...kelas.filter(Boolean));
-            } else if (typeof kelas === 'object' && kelas !== null) {
-              DB.kehadiran.push(...Object.values(kelas).filter(Boolean));
+          const ekstrakData = (node) => {
+            if (!node) return;
+            
+            if (Array.isArray(node)) {
+              node.forEach(item => ekstrakData(item));
+            } else if (typeof node === 'object') {
+              // Jika ini objek record absen tunggal (memiliki siswaId atau status)
+              if (node.siswaId || node.idSiswa || node.status) {
+                DB.kehadiran.push(node);
+              } else {
+                // Jika ini objek pembungkus (key tanggal_kelas)
+                Object.values(node).forEach(child => ekstrakData(child));
+              }
             }
-          });
+          };
+
+          ekstrakData(cloudData.kehadiran);
         }
 
         // 3. AKUN DEMO
@@ -836,7 +847,7 @@ function muatSemuaDataDariDatabase() {
         // 4. KALKULASI MATEMATIKA REALTIME POIN SISWA
         if (DB.siswa.length > 0) {
           DB.siswa.forEach(s => {
-            const logAbsenSiswa = DB.kehadiran.filter(k => k && String(k.siswaId) === String(s.id));
+            const logAbsenSiswa = DB.kehadiran.filter(k => k && String(k.siswaId || k.idSiswa) === String(s.id));
             const skt = logAbsenSiswa.filter(k => ['sakit', 's', 'SAKIT'].includes(String(k.status).trim())).length;
             const izn = logAbsenSiswa.filter(k => ['izin', 'i', 'IZIN'].includes(String(k.status).trim())).length;
             const alp = logAbsenSiswa.filter(k => ['alpa', 'a', 'ALPA'].includes(String(k.status).trim())).length;
@@ -7738,51 +7749,117 @@ function bukaSubMenuRiwayatJurnal() {
 }
 
 function eksekusiHapusTanggalFiktif(tanggal) {
-    const tglBersih = String(tanggal).trim();
+  const tglBersih = String(tanggal).trim();
 
-    if (!confirm(
-        `⚠️ KONFIRMASI\n\nHapus seluruh data absensi tanggal ${tglBersih} ?`
-    )) return;
+  if (!confirm(`⚠️ KONFIRMASI PERMANEN\n\nYakin ingin menghapus seluruh data absensi tanggal ${tglBersih} dari Database Cloud?`)) {
+    return;
+  }
 
-    try {
-
-        if (!Array.isArray(DB.kehadiran))
-            DB.kehadiran = [];
-
-        if (!Array.isArray(DB.hariAktif))
-            DB.hariAktif = [];
-
-        // 1. Hapus seluruh log absensi
-        DB.kehadiran = DB.kehadiran.filter(k =>
-            String(k.tanggal).trim() !== tglBersih
-        );
-
-        // 2. Hapus hari efektif
-        DB.hariAktif = DB.hariAktif.filter(h =>
-            String(h.tanggal).trim() !== tglBersih
-        );
-
-        // 3. Simpan ke Firebase
-        simpanDataKeStorage();
-
-        showToast(
-            `Tanggal ${tglBersih} berhasil dihapus.`,
-            "success"
-        );
-
-        // Refresh daftar
-        renderRekapKetidakhadiran();
-
-    } catch(err) {
-
-        console.error(err);
-
-        showToast(
-            "Gagal menghapus data.",
-            "danger"
-        );
-
+  try {
+    let targetDb = null;
+    if (typeof database !== 'undefined') {
+      targetDb = database;
+    } else if (window.firebase && window.firebase.apps && window.firebase.apps.length > 0) {
+      targetDb = window.firebase.apps[0].database();
     }
+
+    if (!targetDb) {
+      showToast("Database Firebase tidak terhubung!", "danger");
+      return;
+    }
+
+    // 1. Dapatkan referensi data kehadiran dari Firebase Realtime Database
+    const kehadiranRef = targetDb.ref('kesiswaan_cloud/kehadiran');
+
+    kehadiranRef.once('value').then((snapshot) => {
+      const cloudKehadiran = snapshot.val();
+
+      if (!cloudKehadiran) {
+        showToast("Data kehadiran di Cloud kosong.", "warning");
+        return;
+      }
+
+      // SKENARIO A: Jika data berbentuk ARRAY di Firebase (0, 1, 2, dst.)
+      if (Array.isArray(cloudKehadiran)) {
+        const dataBersih = cloudKehadiran.filter(item => {
+          if (!item) return false;
+          return String(item.tanggal).trim() !== tglBersih;
+        });
+
+        // Timpa array di Firebase dengan data yang sudah difilter
+        kehadiranRef.set(dataBersih);
+      } 
+      // SKENARIO B: Jika data berbentuk OBJEK / KEY STRING di Firebase (2026-07-20_XII_AKL)
+      else if (typeof cloudKehadiran === 'object') {
+        let updates = {};
+
+        Object.keys(cloudKehadiran).forEach(key => {
+          const item = cloudKehadiran[key];
+
+          // Cek jika Key diawali tanggal (misal "2026-07-20_...")
+          // ATAU jika properti 'tanggal' di dalam item cocok
+          if (key.startsWith(tglBersih) || (item && String(item.tanggal).trim() === tglBersih)) {
+            updates[key] = null; // Menandakan perintah HAPUS di Firebase
+          } 
+          // Jika di dalam key bertingkat terdapat sub-array/sub-objek
+          else if (typeof item === 'object' && item !== null) {
+            Object.keys(item).forEach(subKey => {
+              const subItem = item[subKey];
+              if (subItem && String(subItem.tanggal).trim() === tglBersih) {
+                updates[`${key}/${subKey}`] = null;
+              }
+            });
+          }
+        });
+
+        // Eksekusi penghapusan serentak di Firebase
+        if (Object.keys(updates).length > 0) {
+          kehadiranRef.update(updates);
+        }
+      }
+
+      // 2. Hapus tanggal dari node hariAktif jika ada
+      targetDb.ref('kesiswaan_cloud/hariAktif').once('value').then((hSnapshot) => {
+        const cloudHariAktif = hSnapshot.val();
+        if (cloudHariAktif) {
+          if (Array.isArray(cloudHariAktif)) {
+            const hariAktifBersih = cloudHariAktif.filter(h => String(h.tanggal || h).trim() !== tglBersih);
+            targetDb.ref('kesiswaan_cloud/hariAktif').set(hariAktifBersih);
+          } else if (typeof cloudHariAktif === 'object') {
+            Object.keys(cloudHariAktif).forEach(hk => {
+              if (String(cloudHariAktif[hk].tanggal || cloudHariAktif[hk]).trim() === tglBersih) {
+                targetDb.ref(`kesiswaan_cloud/hariAktif/${hk}`).remove();
+              }
+            });
+          }
+        }
+      });
+
+      // 3. Update Variabel Lokal DB
+      if (Array.isArray(DB.kehadiran)) {
+        DB.kehadiran = DB.kehadiran.filter(k => String(k.tanggal).trim() !== tglBersih);
+      }
+      if (Array.isArray(DB.hariAktif)) {
+        DB.hariAktif = DB.hariAktif.filter(h => String(h.tanggal).trim() !== tglBersih);
+      }
+
+      // Jalankan fungsi simpan lokal pendukung (opsional)
+      if (typeof simpanDataKeStorage === 'function') simpanDataKeStorage();
+
+      showToast(`Jurnal absensi tanggal ${tglBersih} berhasil dihapus permanen!`, "success");
+
+      // Refresh Tampilan Halaman
+      bukaSubMenuRiwayatJurnal();
+
+    }).catch((err) => {
+      console.error("Gagal menghapus jurnal dari Firebase:", err);
+      showToast("Gagal menghapus data dari server Firebase.", "danger");
+    });
+
+  } catch (err) {
+    console.error(err);
+    showToast("Terjadi kesalahan sistem saat menghapus.", "danger");
+  }
 }
 
     // Fungsi Pengisi Data Tabel Admin Global (Wajib dipasang berdekatan)
