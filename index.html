@@ -3020,7 +3020,7 @@ function pilihSiswaCP(id){
       const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       const tglSurat = `${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
 
-      const noSuratDefault = "421.5/124/SMKN1-MEP/VI/2026";
+      const noSuratDefault = "09. /SMK-MPG/  /2026";
 
       window.currentSuratData = {
         siswaId: sid, s, pel, kh, all, totalPoin, tglSurat,
@@ -3035,16 +3035,24 @@ function pilihSiswaCP(id){
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    function renderSuratPreview() {
-      const d = window.currentSuratData;
-      const preview = document.getElementById('suratPreview');
+function renderSuratPreview() {
+  const d = window.currentSuratData;
+  const preview = document.getElementById('suratPreview');
 
-      const namaSekolah = (DB.identitas && DB.identitas.namaSekolah) ? DB.identitas.namaSekolah : 'SMK Negeri 1 Mepanga';
-      const alamatSekolah = (DB.identitas && DB.identitas.alamat) ? DB.identitas.alamat : 'Jl. Nusantara No. 116, Desa Kayu Agung, Kec. Mepanga, Kabupaten Parigi Moutong';
-      const namaKepsek = (DB.identitas && DB.identitas.kepsek) ? DB.identitas.kepsek : 'Drs. H. Ahmad Saiful, M.Pd.';
-      const nipKepsek = (DB.identitas && DB.identitas.nipKepsek) ? DB.identitas.nipKepsek : '19740823 200112 1 002';
+  const namaSekolah = (DB.identitas && DB.identitas.namaSekolah) ? DB.identitas.namaSekolah : 'SMK NEGERI 1 MEPANGA';
+  const alamatSekolah = (DB.identitas && DB.identitas.alamat) ? DB.identitas.alamat : 'Jl. Nusantara No. 116, Desa Kayu Agung, Kec. Mepanga, Kabupaten Parigi Moutong';
+  const namaKepsek = (DB.identitas && DB.identitas.kepsek) ? DB.identitas.kepsek : 'Drs. H. Ahmad Saiful, M.Pd.';
+  const nipKepsek = (DB.identitas && DB.identitas.nipKepsek) ? DB.identitas.nipKepsek : '19740823 200112 1 002';
 
-      let rowsHtml = d.all.map((r, i) => `
+  // Dynamic Logo: Ambil Logo Provinsi dan Logo Sekolah dari Identitas
+  const logoProvinsi = (DB.identitas && DB.identitas.logoProvinsi) 
+    ? DB.identitas.logoProvinsi 
+    : 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_Central_Sulawesi.svg';
+  const logoSekolah = (DB.identitas && (DB.identitas.logo || DB.identitas.logoSekolah)) 
+    ? (DB.identitas.logo || DB.identitas.logoSekolah) 
+    : '';
+
+  let rowsHtml = d.all.map((r, i) => `
     <tr style="page-break-inside: avoid;">
       <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">${i + 1}</td>
       <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">${r.tanggal}</td>
@@ -3054,11 +3062,11 @@ function pilihSiswaCP(id){
     </tr>
   `).join('');
 
-      if (d.all.length === 0) {
-        rowsHtml = `<tr><td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; color:#888;">Tidak ada riwayat pelanggaran atau ketidakhadiran.</td></tr>`;
-      }
+  if (d.all.length === 0) {
+    rowsHtml = `<tr><td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; color:#888;">Tidak ada riwayat pelanggaran atau ketidakhadiran.</td></tr>`;
+  }
 
-      preview.innerHTML = `
+  preview.innerHTML = `
     <div class="space-y-4 font-sans no-print">
       <div class="mt-4 flex gap-3">
         <button onclick="toggleSuratEdit()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 flex items-center gap-2"><i data-lucide="edit-2" class="w-4 h-4"></i>Edit Format / Konten Surat</button>
@@ -3080,11 +3088,21 @@ function pilihSiswaCP(id){
     </div>
 
     <div class="max-w-4xl mx-auto p-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm mt-4" id="suratContent" style="font-family: 'Times New Roman', Times, serif; color: #000; line-height: 1.5; font-size: 11pt;">
-      <div class="kop" style="border-bottom: 3px double #000; padding-bottom: 5px; margin-bottom: 20px; text-align: center;">
-        <h2 style="margin: 0; font-size: 13pt; text-transform: uppercase; font-weight: bold; text-align: center;">Pemerintah Provinsi Sulawesi Tengah</h2>
-        <h1 style="margin: 0; font-size: 15pt; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; text-align: center;">${namaSekolah}</h1>
-        <p style="margin: 2px 0; font-size: 9pt; font-style: italic; text-align: center;">${alamatSekolah}</p>
-        <p style="margin: 2px 0; font-size: 9pt; font-style: italic; text-align: center;">Email: smkn1mepanga@sch.id | Website: www.smkn1mepanga.sch.id</p>
+      <!-- KOP SURAT 2 LOGO -->
+      <div class="kop" style="border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <img src="${logoProvinsi}" style="width: 75px; height: 75px; object-fit: contain; flex-shrink: 0;" alt="Logo Provinsi">
+        
+        <div style="text-align: center; flex-grow: 1; padding: 0 10px;">
+          <h2 style="margin: 0; font-size: 12pt; text-transform: uppercase; font-weight: normal; text-align: center;">Pemerintah Provinsi Sulawesi Tengah</h2>
+          <h3 style="margin: 0; font-size: 13pt; text-transform: uppercase; font-weight: bold; text-align: center;">Dinas Pendidikan</h3>
+          <h1 style="margin: 2px 0; font-size: 15pt; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; text-align: center;">${namaSekolah}</h1>
+          <p style="margin: 2px 0; font-size: 8.5pt; font-style: italic; text-align: center;">Alamat: ${alamatSekolah}</p>
+          <p style="margin: 0; font-size: 8.5pt; font-style: italic; text-align: center;">Email: smkn1mepanga@sch.id | Website: www.smkn1mepanga.sch.id</p>
+        </div>
+
+        ${logoSekolah 
+          ? `<img src="${logoSekolah}" style="width: 75px; height: 75px; object-fit: contain; flex-shrink: 0;" alt="Logo Sekolah">` 
+          : `<div style="width: 75px; height: 75px; flex-shrink: 0;"></div>`}
       </div>
       
       <div class="judul" style="text-align: center; margin-bottom: 25px;">
@@ -3126,7 +3144,7 @@ function pilihSiswaCP(id){
       <div class="ttd-section" style="width: 100%; margin-top: 40px; page-break-inside: avoid;">
         <div class="ttd-box" style="float: right; width: 45%; text-align: center;">
           <p>Kayu Agung, <span id="displayTanggal">${d.tglSurat}</span></p>
-          <p>Kepala SMKN 1 Kayu Agung,</p>
+          <p>Kepala SMKN 1 Mepanga,</p>
           <div class="space" style="height: 75px;"></div>
           <p style="font-weight:bold; text-decoration:underline;">${namaKepsek}</p>
           <p>NIP. ${nipKepsek}</p>
@@ -3135,55 +3153,54 @@ function pilihSiswaCP(id){
       </div>
     </div>
   `;
-    }
+}
 
-    function toggleSuratEdit() {
-      const form = document.getElementById('suratEditForm');
-      form.classList.toggle('hidden');
-    }
+function toggleSuratEdit() {
+  const form = document.getElementById('suratEditForm');
+  form.classList.toggle('hidden');
+}
 
-    function saveSuratEdit() {
-      const d = window.currentSuratData;
-      d.noSurat = document.getElementById('editNomor').value;
-      d.tglSurat = document.getElementById('editTanggal').value;
-      d.paragrafPembuka = document.getElementById('editParagraf').value;
-      d.paragrafPenutup = document.getElementById('editPenutup').value;
+function saveSuratEdit() {
+  const d = window.currentSuratData;
+  d.noSurat = document.getElementById('editNomor').value;
+  d.tglSurat = document.getElementById('editTanggal').value;
+  d.paragrafPembuka = document.getElementById('editParagraf').value;
+  d.paragrafPenutup = document.getElementById('editPenutup').value;
 
-      document.getElementById('displayNomor').innerText = d.noSurat;
-      document.getElementById('displayTanggal').innerText = d.tglSurat;
-      document.getElementById('displayPembuka').innerText = d.paragrafPembuka;
-      document.getElementById('displayPenutup').innerText = d.paragrafPenutup;
+  document.getElementById('displayNomor').innerText = d.noSurat;
+  document.getElementById('displayTanggal').innerText = d.tglSurat;
+  document.getElementById('displayPembuka').innerText = d.paragrafPembuka;
+  document.getElementById('displayPenutup').innerText = d.paragrafPenutup;
 
-      toggleSuratEdit();
-      showToast('Konten surat berhasil diperbarui!', 'success');
-    }
+  toggleSuratEdit();
+  if (typeof showToast === 'function') showToast('Konten surat berhasil diperbarui!', 'success');
+}
 
-    function downloadSurat() {
-      const content = document.getElementById('suratContent').innerHTML;
-      const link = document.createElement('a');
-      link.href = 'data:text/html,' + encodeURIComponent(`<html><head><meta charset="UTF-8"><title>Surat Keterangan</title><style>body{font-family:Arial,sans-serif;padding:20px;line-height:1.6}table{border-collapse:collapse;width:100%;margin:15px 0}th,td{border:1px solid #000;padding:8px;text-align:center}td{text-align:left}.kop{text-align:center;border-bottom:3px solid #000;padding:15px 0 10px;margin-bottom:20px}h1{text-align:center;font-size:14pt;font-weight:bold;margin:20px 0}</style></head><body>${content}</body></html>`);
-      link.download = 'Surat_Keterangan_Pelanggaran.html';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-      showToast('Surat berhasil diunduh', 'success');
-    }
+function downloadSurat() {
+  const content = document.getElementById('suratContent').innerHTML;
+  const link = document.createElement('a');
+  link.href = 'data:text/html,' + encodeURIComponent(`<html><head><meta charset="UTF-8"><title>Surat Keterangan</title><style>body{font-family:'Times New Roman',serif;padding:20px;line-height:1.6}.kop{display:flex;align-items:center;justify-content:space-between;border-bottom:3px double #000;padding-bottom:8px;margin-bottom:20px}table{border-collapse:collapse;width:100%;margin:15px 0}th,td{border:1px solid #000;padding:8px;text-align:center}td{text-align:left}h1{text-align:center;font-size:14pt;font-weight:bold;margin:20px 0}</style></head><body>${content}</body></html>`);
+  link.download = 'Surat_Keterangan_Pelanggaran.html';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  if (typeof showToast === 'function') showToast('Surat berhasil diunduh', 'success');
+}
 
-    function printSurat() {
-      const d = window.currentSuratData;
-      const content = document.getElementById('suratContent').innerHTML;
+function printSurat() {
+  const d = window.currentSuratData;
+  const content = document.getElementById('suratContent').innerHTML;
 
-      const w = window.open('', '_blank');
-      w.document.write(`<!DOCTYPE html>
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Surat Keterangan Catatan Kesiswaan</title>
   <style>
     @page {
-      size: A4;
-      margin: 25mm 20mm 20mm 20mm;
+      size: A4 portrait;
+      margin: 15mm 20mm 15mm 20mm;
     }
     
     * {
@@ -3195,7 +3212,7 @@ function pilihSiswaCP(id){
     body {
       font-family: 'Times New Roman', Times, serif;
       font-size: 11pt;
-      line-height: 1.5;
+      line-height: 1.4;
       color: #000;
       background: #f5f5f5;
       padding: 20px;
@@ -3222,7 +3239,7 @@ function pilihSiswaCP(id){
       max-width: 800px;
       margin: 0 auto;
       background: white;
-      padding: 40px;
+      padding: 30px;
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
@@ -3268,17 +3285,22 @@ function pilihSiswaCP(id){
     .editor-box .btn-close:hover { background: #475569; }
     
     .kop {
-      border-bottom: 3px double #000;
-      padding-bottom: 5px;
-      margin-bottom: 20px;
-      text-align: center !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      border-bottom: 3px double #000 !important;
+      padding-bottom: 8px !important;
+      margin-bottom: 20px !important;
     }
-    .kop h1, .kop h2, .kop p {
-      text-align: center !important;
+    .kop img {
+      width: 75px !important;
+      height: 75px !important;
+      object-fit: contain !important;
     }
+    
     .judul {
       text-align: center !important;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
     }
     .judul h3, .judul p {
       text-align: center !important;
@@ -3287,13 +3309,13 @@ function pilihSiswaCP(id){
     table {
       border-collapse: collapse;
       width: 100%;
-      margin: 15px 0;
+      margin: 12px 0;
       font-size: 10pt;
     }
     
     th, td {
       border: 1px solid #000;
-      padding: 6px 8px;
+      padding: 5px 7px;
       text-align: left;
       vertical-align: top;
     }
@@ -3310,16 +3332,16 @@ function pilihSiswaCP(id){
     
     p {
       text-align: justify;
-      margin: 8px 0;
+      margin: 6px 0;
     }
     
     .ttd-section {
-      margin-top: 30px;
+      margin-top: 25px;
       width: 100%;
       page-break-inside: avoid;
     }
     
-    .ttd-container {
+    .ttd-box {
       float: right;
       width: 45%;
       text-align: center;
@@ -3351,9 +3373,8 @@ function pilihSiswaCP(id){
   <\/script>
 </body>
 </html>`);
-      w.document.close();
-    }
-
+  w.document.close();
+}
 
     // ===== ADMIN KELAS =====
     function renderAdminKelas() {
@@ -9056,91 +9077,190 @@ async function simpanSolusiTindakan() {
 }
 
 
-    // D. Fungsi Otomatisasi Cetak Surat Dinas Resmi
-    function cetakSuratTindakan(idSiswa, totalPoin) {
-      const s = DB.siswa.find(x => String(x.id) === String(idSiswa));
-      if (!s) return;
+// D. Fungsi Otomatisasi Cetak Surat Dinas Resmi (DUA LOGO + FIT A4 + EDIT NOMOR SURAT)
+function cetakSuratTindakan(idSiswa, totalPoin) {
+  const s = (DB.siswa || []).find(x => String(x.id) === String(idSiswa));
+  if (!s) return;
 
-      let jenisSurat = "";
-      let isiPerihal = "";
-      let deskripsiTindakan = "";
+  let jenisSurat = "";
+  let isiPerihal = "";
+  let deskripsiTindakan = "";
 
-      if (totalPoin >= 75) {
-        jenisSurat = "SURAT PANGGILAN ORANG TUA / WALI MURID";
-        isiPerihal = "Undangan Menghadap Wakasek Kesiswaan";
-        deskripsiTindakan = "Sehubungan dengan akumulasi poin pelanggaran tata tertib putra/putri Bapak/Ibu yang telah mencapai angka kritis <strong>" + totalPoin + " Poin</strong>, maka kami mengharapkan kehadiran Bapak/Ibu ke sekolah guna koordinasi kelanjutan studi siswa.";
-      } else if (totalPoin >= 50) {
-        jenisSurat = "SURAT PERINGATAN KESISWAAN (SP)";
-        isiPerihal = "Pemberitahuan Resmi dan Peringatan Perilaku Siswa";
-        deskripsiTindakan = "Melalui surat ini kami memberitahukan bahwa putra/putri Bapak/Ibu telah mengumpulkan akumulasi pelanggaran kesiswaan sebanyak <strong>" + totalPoin + " Poin</strong>. Sekolah memberikan Peringatan Keras agar yang bersangkutan segera memperbaiki perilaku.";
+  if (totalPoin >= 75) {
+    jenisSurat = "SURAT PANGGILAN ORANG TUA / WALI MURID";
+    isiPerihal = "Undangan Menghadap Wakasek Kesiswaan";
+    deskripsiTindakan = "Sehubungan dengan akumulasi poin pelanggaran tata tertib putra/putri Bapak/Ibu yang telah mencapai angka kritis <strong>" + totalPoin + " Poin</strong>, maka kami mengharapkan kehadiran Bapak/Ibu ke sekolah guna koordinasi kelanjutan studi siswa.";
+  } else if (totalPoin >= 50) {
+    jenisSurat = "SURAT PERINGATAN KESISWAAN (SP)";
+    isiPerihal = "Pemberitahuan Resmi dan Peringatan Perilaku Siswa";
+    deskripsiTindakan = "Melalui surat ini kami memberitahukan bahwa putra/putri Bapak/Ibu telah mengumpulkan akumulasi pelanggaran kesiswaan sebanyak <strong>" + totalPoin + " Poin</strong>. Sekolah memberikan Peringatan Keras agar yang bersangkutan segera memperbaiki perilaku.";
+  }
+
+  // --- EDIT NOMOR SURAT DINAMIS ---
+  const nomorDefault = `04./SMK-MPG//${new Date().getFullYear()}`;
+  const inputNomorSurat = prompt("Masukkan / Edit Nomor Surat Dinas Resmi:", nomorDefault);
+
+  // Jika pengguna menekan tombol Cancel pada prompt, batalkan proses cetak
+  if (inputNomorSurat === null) return; 
+
+  const nomorSuratFinal = inputNomorSurat.trim() || nomorDefault;
+
+  const namaSekolah = DB.identitas?.namaSekolah || 'SMK NEGERI 1 MEPANGA';
+  const alamatSekolah = DB.identitas?.alamat || 'Jl. Nusantara No. 116, Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong';
+  
+  // Dynamic Logo: Mengambil logo provinsi & logo sekolah dari DB.identitas
+  const logoProvinsi = DB.identitas?.logoProvinsi || 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_Central_Sulawesi.svg';
+  const logoSekolah = DB.identitas?.logo || DB.identitas?.logoSekolah || '';
+
+  const htmlSurat = `
+  <!DOCTYPE html>
+  <html lang="id">
+  <head>
+    <meta charset="UTF-8">
+    <title>${jenisSurat} - ${s.nama}</title>
+    <style>
+      @page {
+        size: A4 portrait;
+        margin: 12mm 18mm 12mm 18mm;
       }
+      * { box-sizing: border-box; }
+      body { 
+        font-family: 'Times New Roman', Times, serif; 
+        font-size: 11pt; 
+        line-height: 1.35; 
+        color: #000; 
+        background: #fff; 
+        margin: 0; 
+        padding: 0; 
+      }
+      .container { width: 100%; }
+      
+      /* TATA LETAK KOP 2 LOGO (PROVINSI & SEKOLAH) */
+      .kop-container { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        border-bottom: 3px double #000; 
+        padding-bottom: 8px; 
+        margin-bottom: 12px; 
+      }
+      .kop-logo-kiri, .kop-logo-kanan {
+        width: 75px;
+        height: 75px;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+      .kop-teks { 
+        text-align: center; 
+        flex-grow: 1;
+        padding: 0 10px;
+      }
+      .kop-teks h3 { margin: 0; font-size: 11pt; font-weight: normal; text-transform: uppercase; }
+      .kop-teks h2 { margin: 0; font-size: 12pt; font-weight: bold; text-transform: uppercase; }
+      .kop-teks h1 { margin: 2px 0; font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+      .kop-teks p { margin: 0; font-size: 8.5pt; font-style: italic; }
 
-      const namaSekolah = DB.identitas?.namaSekolah || 'SMK Negeri 1 Mepanga';
-      const alamatSekolah = DB.identitas?.alamat || 'Jl. Nusantara No. 116, Kayu Agung, Kec. Mepanga';
+      .judul { 
+        text-align: center; 
+        font-weight: bold; 
+        text-decoration: underline; 
+        text-transform: uppercase; 
+        margin: 12px 0; 
+        font-size: 12pt; 
+      }
+      .meta-surat { margin-bottom: 12px; }
+      .meta-surat td { vertical-align: top; padding: 1px 4px; }
+      
+      .table-data { margin: 8px 0 8px 20px; border-collapse: collapse; }
+      .table-data td { padding: 2px 6px; }
 
-      const htmlSurat = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>${jenisSurat}</title>
-      <style>
-        body { font-family: 'Times New Roman', serif; padding: 40px; font-size: 12pt; line-height: 1.6; color: black; background: white; }
-        .kop { border-bottom: 3px double black; text-align: center; padding-bottom: 10px; margin-bottom: 25px; }
-        .kop h2 { margin: 0; font-size: 14pt; font-weight: normal; }
-        .kop h1 { margin: 0; font-size: 16pt; text-transform: uppercase; }
-        .kop p { margin: 2px 0; font-size: 10pt; font-style: italic; }
-        .judul { text-align: center; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-bottom: 25px; font-size: 13pt; }
-        .meta-surat { margin-bottom: 20px; }
-        .table-data { margin: 15px 0 15px 30px; border-collapse: collapse; }
-        .table-data td { padding: 4px 8px; }
-        .ttd { float: right; width: 45%; text-align: center; margin-top: 50px; }
-        @media print { .no-print { display: none; } body { padding: 0; } }
-      </style>
-    </head>
-    <body>
-      <div class="no-print" style="margin-bottom: 25px; text-align: center;">
-        <button onclick="window.print()" style="padding: 10px 25px; font-weight: bold; background: #2563eb; color: white; border: none; cursor: pointer; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🖨️ Cetak Surat Sekarang</button>
+      .paragraf { text-align: justify; text-indent: 30px; margin: 6px 0; }
+      .ttd-box { 
+        width: 100%; 
+        margin-top: 25px; 
+        display: flex; 
+        justify-content: flex-end; 
+      }
+      .ttd { width: 230px; text-align: center; }
+
+      @media print { 
+        .no-print { display: none !important; } 
+        body { background: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="no-print" style="margin-bottom: 15px; text-align: center; background: #f1f5f9; padding: 10px; border-radius: 8px;">
+      <button onclick="window.print()" style="padding: 8px 20px; font-weight: bold; background: #2563eb; color: white; border: none; cursor: pointer; border-radius: 6px;">🖨️ Cetak Surat Sekarang</button>
+      <button onclick="window.close()" style="padding: 8px 15px; font-weight: bold; background: #64748b; color: white; border: none; cursor: pointer; border-radius: 6px; margin-left: 10px;">Tutup</button>
+    </div>
+
+    <div class="container">
+      <!-- KOP SURAT 2 LOGO -->
+      <div class="kop-container">
+        <img src="${logoProvinsi}" class="kop-logo-kiri" alt="Logo Pemprov">
+        
+        <div class="kop-teks">
+          <h3>PEMERINTAH PROVINSI SULAWESI TENGAH</h3>
+          <h2>DINAS PENDIDIKAN</h2>
+          <h1>${namaSekolah}</h1>
+          <p>Alamat: ${alamatSekolah}</p>
+        </div>
+
+        ${logoSekolah 
+          ? `<img src="${logoSekolah}" class="kop-logo-kanan" alt="Logo Sekolah">` 
+          : `<div class="kop-logo-kanan" style="visibility:hidden;"></div>`}
       </div>
-      <div class="kop">
-        <h2>PEMERINTAH PROVINSI SULAWESI TENGAH</h2>
-        <h2>DINAS PENDIDIKAN</h2>
-        <h1>${namaSekolah}</h1>
-        <p>${alamatSekolah}</p>
-      </div>
+
+      <!-- JUDUL SURAT -->
       <div class="judul">${jenisSurat}</div>
-      <div class="meta-surat">
-        Nomor &nbsp;: 421.5/___/SMKN1-MEP/${new Date().getFullYear()}<br>
-        Sifat &nbsp;&nbsp;&nbsp;&nbsp;: Penting / Rahasia<br>
-        Lamp &nbsp;&nbsp;&nbsp;: -<br>
-        Perihal &nbsp;: ${isiPerihal}
-      </div>
-      <p style="margin-top: 20px;">Kepada Yth.<br>Bapak / Ibu Orang Tua / Wali dari <strong>${s.nama}</strong><br>di Tempat</p>
-      <p>Dengan hormat,</p>
-      <p>${deskripsiTindakan}</p>
-      <p>Adapun biodata siswa yang bersangkutan adalah sebagai berikut:</p>
+
+      <!-- META SURAT (DENGAN NOMOR SURAT HASIL INPUT/EDIT) -->
+      <table class="meta-surat">
+        <tr><td>Nomor</td><td>:</td><td><strong>${nomorSuratFinal}</strong></td></tr>
+        <tr><td>Sifat</td><td>:</td><td>Penting / Rahasia</td></tr>
+        <tr><td>Lampiran</td><td>:</td><td>-</td></tr>
+        <tr><td>Perihal</td><td>:</td><td><strong>${isiPerihal}</strong></td></tr>
+      </table>
+
+      <p style="margin-top: 8px; margin-bottom: 4px;">Kepada Yth.<br>Bapak / Ibu Orang Tua / Wali dari <strong>${s.nama}</strong><br>di Tempat</p>
+
+      <p style="margin-bottom: 4px;">Dengan hormat,</p>
+      
+      <p class="paragraf">${deskripsiTindakan}</p>
+      <p style="margin: 4px 0;">Adapun biodata siswa yang bersangkutan adalah sebagai berikut:</p>
+      
       <table class="table-data">
         <tr><td>Nama Lengkap</td><td>:</td><td><strong>${s.nama}</strong></td></tr>
         <tr><td>NISN</td><td>:</td><td>${s.nisn || '-'}</td></tr>
         <tr><td>Kelas</td><td>:</td><td>${s.kelas}</td></tr>
       </table>
-      <p>Demikian surat ini kami sampaikan. Atas perhatian dan kerja sama Bapak/Ibu demi kebaikan pendidikan putra/putri kita, kami ucapkan terima kasih.</p>
-      <div class="ttd">
-        <p>Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-        <p>An. Kepala Sekolah<br>Urusan Kesiswaan / BK,</p>
-        <div style="height: 80px;"></div>
-        <p style="font-weight: bold; text-decoration: underline;">_______________________</p>
-        <p style="font-size: 10pt; color: #444;">NIP. .........................</p>
+
+      <p class="paragraf">Demikian surat ini kami sampaikan. Atas perhatian dan kerja sama Bapak/Ibu demi kebaikan pendidikan putra/putri kita, kami ucapkan terima kasih.</p>
+
+      <!-- BLOK TANDA TANGAN -->
+      <div class="ttd-box">
+        <div class="ttd">
+          <p style="margin: 0;">Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <p style="margin: 2px 0 0 0;">An. Kepala Sekolah<br>Urusan Kesiswaan / BK,</p>
+          <div style="height: 55px;"></div>
+          <p style="font-weight: bold; text-decoration: underline; margin: 0;">_______________________</p>
+          <p style="font-size: 9pt; color: #333; margin: 2px 0 0 0;">NIP. .........................</p>
+        </div>
       </div>
-    </body>
-    </html>
+    </div>
+  </body>
+  </html>
   `;
 
-      const w = window.open("", "_blank");
-      w.document.write(htmlSurat);
-      w.document.close();
-    }
-
-
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.write(htmlSurat);
+    w.document.close();
+  } else {
+    alert("Gagal membuka jendela cetak! Harap izinkan Pop-up pada browser Anda.");
+  }
+}
     // ====================================================
     // PERBAIKAN: LAPORAN DENGAN TANDA TANGAN NAMA GURU OTOMATIS
     // ====================================================
