@@ -1648,6 +1648,23 @@ function lihatDetailPelanggaranSiswa(siswaId) {
 
   const namaSiswaAsli = String(siswa.nama || siswa.name || "").trim().toLowerCase();
 
+  // Cek apakah user saat ini adalah Admin
+  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+
+  // Perbarui Header Tabel jika ada elemen <thead> khusus detail siswa
+  const thead = modal ? modal.querySelector('thead tr') : null;
+  if (thead) {
+    thead.innerHTML = `
+      <th class="p-3 text-center">No</th>
+      <th class="p-3 text-left">Tanggal</th>
+      <th class="p-3 text-left">Jenis Pelanggaran / Aturan</th>
+      <th class="p-3 text-center">Poin</th>
+      <th class="p-3 text-left">Guru Pelapor</th>
+      ${isAdmin ? '<th class="p-3 text-center">Aksi</th>' : ''}
+    `;
+  }
+
   const listPelanggaran = (DB.pelanggaran || []).filter(p => {
     if (!p) return false;
     const matchId = (p.siswaId && String(p.siswaId) === String(siswa.id)) || (p.idSiswa && String(p.idSiswa) === String(siswa.id));
@@ -1658,7 +1675,8 @@ function lihatDetailPelanggaranSiswa(siswaId) {
 
   if (tbody) {
     if (listPelanggaran.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400 italic">Belum ada catatan pelanggaran untuk siswa ini.</td></tr>`;
+      const colSpanCount = isAdmin ? 6 : 5;
+      tbody.innerHTML = `<tr><td colspan="${colSpanCount}" class="p-4 text-center text-gray-400 italic">Belum ada catatan pelanggaran untuk siswa ini.</td></tr>`;
     } else {
       tbody.innerHTML = listPelanggaran.map((p, idx) => {
         const tt = (DB.tatatertib || []).find(x => x && (
@@ -1669,6 +1687,7 @@ function lihatDetailPelanggaranSiswa(siswaId) {
 
         const jenisText = tt ? (tt.deskripsi || tt.jenis || tt.nama) : (p.jenisLog || p.pelanggaran || 'Pelanggaran Manual');
         const poinVal = tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || parseInt(p.skor) || 0);
+        const namaSiswaClean = (siswa.nama || siswa.name || '').replace(/'/g, "\\'");
 
         return `
           <tr class="border-b dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
@@ -1677,6 +1696,16 @@ function lihatDetailPelanggaranSiswa(siswaId) {
             <td class="p-3 text-gray-800 dark:text-white font-semibold">${jenisText}</td>
             <td class="p-3 text-center font-bold text-red-600 dark:text-red-400">+${poinVal}</td>
             <td class="p-3 text-gray-500 dark:text-gray-400 text-xs">${p.guru || p.namaGuru || 'Sistem'}</td>
+            ${isAdmin ? `
+              <td class="p-3 text-center">
+                <button 
+                  onclick="hapusPelanggaranAdmin('${p.id}', '${namaSiswaClean}')" 
+                  class="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-600 font-semibold rounded transition"
+                  title="Hapus Pelanggaran">
+                  🗑️ Hapus
+                </button>
+              </td>
+            ` : ''}
           </tr>
         `;
       }).join('');
@@ -8939,63 +8968,92 @@ function tutupModalPenebusan() {
       document.getElementById('modalTindakanKesiswaan').classList.add('hidden');
     }
 
-    // C. Fungsi Menyimpan Hasil Konseling / Pembinaan ke Database (SINKRON TANGGAL EDITABLE)
-    function simpanSolusiTindakan() {
-      const petugas = document.getElementById('mtPetugas').value; 
-      const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
+// C. Fungsi Menyimpan Hasil Konseling / Pembinaan ke Database (SINKRON CLOUD & LOCAL)
+async function simpanSolusiTindakan() {
+  const petugas = document.getElementById('mtPetugas').value; 
+  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
 
-      if (petugas === 'Wali Kelas' && userRole !== 'walas' && userRole !== 'admin') {
-        alert('⚠️ Akses Ditolak! Anda bukan Wali Kelas.'); return;
-      }
-      if (petugas === 'Guru BK' && userRole !== 'bk' && userRole !== 'admin') {
-        alert('⚠️ Akses Ditolak! Anda bukan Guru BK.'); return;
-      }
-      if (petugas === 'Wakasis' && userRole !== 'wakasis' && userRole !== 'admin') {
-        alert('⚠️ Akses Ditolak! Anda bukan Wakasek Kesiswaan.'); return;
-      }
+  // 1. Validasi Hak Akses
+  if (petugas === 'Wali Kelas' && userRole !== 'walas' && userRole !== 'admin') {
+    alert('⚠️ Akses Ditolak! Anda bukan Wali Kelas.'); return;
+  }
+  if (petugas === 'Guru BK' && userRole !== 'bk' && userRole !== 'admin') {
+    alert('⚠️ Akses Ditolak! Anda bukan Guru BK.'); return;
+  }
+  if (petugas === 'Wakasis' && userRole !== 'wakasis' && userRole !== 'admin') {
+    alert('⚠️ Akses Ditolak! Anda bukan Wakasek Kesiswaan.'); return;
+  }
 
-      const siswaId = document.getElementById('mtSiswaId').value;
-      const levelTeks = document.getElementById('mtLevelTeks').value;
-      const guruPenindak = document.getElementById('mtGuru').value;
-      const solusiText = document.getElementById('mtSolusi').value.trim();
-      
-      // Membaca tanggal pilihan dari input form modal yang sudah diedit user
-      const tanggalPilihan = document.getElementById('mtTanggalTindakan').value;
+  // 2. Ambil Nilai Form
+  const siswaId = document.getElementById('mtSiswaId').value;
+  const levelTeks = document.getElementById('mtLevelTeks').value;
+  
+  // Tangani jika element mtGuru tidak ada / opsional
+  const elGuru = document.getElementById('mtGuru');
+  const guruPenindak = elGuru ? elGuru.value : (currentUser ? currentUser.nama || currentUser.name : 'Petugas');
+  
+  const solusiText = document.getElementById('mtSolusi').value.trim();
+  const tanggalPilihan = document.getElementById('mtTanggalTindakan').value;
 
-      if (!tanggalPilihan) {
-        alert('Mohon tentukan tanggal pelaksanaan tindakan terlebih dahulu!');
-        return;
-      }
+  // 3. Validasi Input Form
+  if (!tanggalPilihan) {
+    alert('Mohon tentukan tanggal pelaksanaan tindakan terlebih dahulu!');
+    return;
+  }
 
-      if (!solusiText) {
-        alert('Mohon isi uraian hasil bimbingan atau solusi penanganan terlebih dahulu!');
-        return;
-      }
+  if (!solusiText) {
+    alert('Mohon isi uraian hasil bimbingan atau solusi penanganan terlebih dahulu!');
+    return;
+  }
 
-      // Hapus riwayat lama jika ini adalah proses update/edit agar tidak dobel data
-      if (DB.riwayatTindakan) {
-        DB.riwayatTindakan = DB.riwayatTindakan.filter(r => !(String(r.siswaId) === String(siswaId) && r.levelTeks === levelTeks));
-      } else {
-        DB.riwayatTindakan = [];
-      }
-
-      const recordBaru = {
-        idTindakan: 'TND-' + Date.now(),
-        siswaId: siswaId,
-        levelTeks: levelTeks,
-        otoritasPetugas: petugas,
-        namaGuru: guruPenindak,
-        solusi: solusiText,
-        tanggalEksekusi: tanggalPilihan // Menyimpan tanggal pilihan guru ke database
-      };
-
-      DB.riwayatTindakan.push(recordBaru);
-      localStorage.setItem('sik_riwayat_tindakan', JSON.stringify(DB.riwayatTindakan));
-
-      alert(`Sukses! Catatan pembinaan resmi disimpan untuk tanggal pelaksanaan: ${tanggalPilihan}.`);
-      tutupModalTindakan();
-      renderBimbinganKesiswaan(); 
+  try {
+    // 4. Update State/Memory Data
+    if (!DB.riwayatTindakan) {
+      DB.riwayatTindakan = [];
+    } else {
+      // Hapus record lama jika memperbarui data dengan siswaId & levelTeks yang sama
+      DB.riwayatTindakan = DB.riwayatTindakan.filter(r => !(String(r.siswaId) === String(siswaId) && r.levelTeks === levelTeks));
     }
+
+    const recordBaru = {
+      idTindakan: 'TND-' + Date.now(),
+      siswaId: siswaId,
+      levelTeks: levelTeks,
+      otoritasPetugas: petugas,
+      namaGuru: guruPenindak,
+      solusi: solusiText,
+      tanggalEksekusi: tanggalPilihan
+    };
+
+    DB.riwayatTindakan.push(recordBaru);
+
+    // 5. SIMPAN KE STORAGE LOKAL & CLOUD (PENTING!)
+    localStorage.setItem('sik_riwayat_tindakan', JSON.stringify(DB.riwayatTindakan));
+
+    // Panggil helper simpan global jika tersedia (Firebase / Backend Cloud Sync)
+    if (typeof simpanDataKeStorage === 'function') {
+      await simpanDataKeStorage('riwayatTindakan');
+    }
+
+    // 6. Umpan Balik & Update UI
+    if (typeof showToast === 'function') {
+      showToast(`Sukses! Catatan pembinaan disimpan untuk tanggal: ${tanggalPilihan}`, 'success');
+    } else {
+      alert(`Sukses! Catatan pembinaan resmi disimpan untuk tanggal pelaksanaan: ${tanggalPilihan}.`);
+    }
+
+    tutupModalTindakan();
+
+    // Re-render menu bimbingan
+    if (typeof renderBimbinganKesiswaan === 'function') {
+      renderBimbinganKesiswaan();
+    }
+
+  } catch (err) {
+    console.error('Gagal menyimpan solusi tindakan:', err);
+    alert('Terjadi kesalahan saat menyimpan data: ' + err.message);
+  }
+}
 
 
     // D. Fungsi Otomatisasi Cetak Surat Dinas Resmi
