@@ -17,7 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
   
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -302,6 +302,7 @@ let DB = {
   // Persiapan fitur baru
   bimbingan: [],
   kelengkapanData: [],
+  libur: [], // 🟢 1. TAMBAHKAN DI SINI
 
   identitas: {
     namaSekolah: 'SMKN 1 Mepanga',
@@ -326,13 +327,9 @@ let DB = {
 
 const FirebaseState = {
 
-  // Sudah siap dipakai?
   ready: false,
-
-  // Sedang proses sinkronisasi?
   syncing: false,
 
-  // Masing-masing node sudah selesai dimuat?
   loaded: {
     users: false,
     siswa: false,
@@ -347,6 +344,7 @@ const FirebaseState = {
     prestasi: false,
     bimbingan: false,
     kelengkapanData: false,
+    libur: false, // 🟢 2. TAMBAHKAN DI SINI
     identitas: false,
     auditLog: false
   }
@@ -357,7 +355,6 @@ const FirebaseState = {
 // FIREBASE CORE
 // ==========================================
 
-// Mengambil referensi node Firebase
 function getNode(node) {
   return targetDb.ref(`kesiswaan_cloud/${node}`);
 }
@@ -371,7 +368,6 @@ const FirebaseService = {
   saving: {},
 
   async saveNode(node, data) {
-
     if (!FirebaseState.ready) {
       throw new Error("Firebase belum selesai dimuat.");
     }
@@ -384,105 +380,51 @@ const FirebaseService = {
     this.saving[node] = true;
 
     try {
-
       await getNode(node).set(data);
-
       console.log(`✅ ${node} berhasil disimpan`);
-
     } catch (err) {
-
       console.error(`❌ Gagal menyimpan ${node}`, err);
       throw err;
-
     } finally {
-
       this.saving[node] = false;
-
     }
-
   }
 
 };
 
-FirebaseService.simpanUsers = function () {
-    return this.saveNode("users", DB.users);
-};
+// Daftar fungsi simpan Firebase
+FirebaseService.simpanUsers = function () { return this.saveNode("users", DB.users); };
+FirebaseService.simpanSiswa = function () { return this.saveNode("siswa", DB.siswa); };
+FirebaseService.simpanKelas = function () { return this.saveNode("kelas", DB.kelas); };
+FirebaseService.simpanPelanggaran = function () { return this.saveNode("pelanggaran", DB.pelanggaran); };
+FirebaseService.simpanKehadiran = function () { return this.saveNode("kehadiran", DB.kehadiran); };
+FirebaseService.simpanHariAktif = function () { return this.saveNode("hariAktif", DB.hariAktif); };
+FirebaseService.simpanKreditPoin = function () { return this.saveNode("kreditPoin", DB.kreditPoin); };
+FirebaseService.simpanKreditPoinMaster = function () { return this.saveNode("kreditPoinMaster", DB.kreditPoinMaster); };
+FirebaseService.simpanRiwayat = function () { return this.saveNode("riwayatTindakan", DB.riwayatTindakan); };
+FirebaseService.simpanAuditLog = function () { return this.saveNode("auditLog", DB.auditLog); };
+FirebaseService.simpanIdentitas = function () { return this.saveNode("identitas", DB.identitas); };
+FirebaseService.simpanBimbingan = function () { return this.saveNode("bimbingan", DB.bimbingan); };
+FirebaseService.simpanKelengkapanData = function () { return this.saveNode("kelengkapanData", DB.kelengkapanData); };
 
-FirebaseService.simpanSiswa = function () {
-    return this.saveNode("siswa", DB.siswa);
-};
-
-FirebaseService.simpanKelas = function () {
-    return this.saveNode("kelas", DB.kelas);
-};
-
-FirebaseService.simpanPelanggaran = function () {
-    return this.saveNode("pelanggaran", DB.pelanggaran);
-};
-
-FirebaseService.simpanKehadiran = function () {
-    return this.saveNode("kehadiran", DB.kehadiran);
-};
-
-FirebaseService.simpanHariAktif = function () {
-    return this.saveNode("hariAktif", DB.hariAktif);
-};
-
-FirebaseService.simpanKreditPoin = function () {
-    return this.saveNode("kreditPoin", DB.kreditPoin);
-};
-
-FirebaseService.simpanKreditPoinMaster = function () {
-    return this.saveNode("kreditPoinMaster", DB.kreditPoinMaster);
-};
-
-FirebaseService.simpanRiwayat = function () {
-    return this.saveNode("riwayatTindakan", DB.riwayatTindakan);
-};
-
-FirebaseService.simpanAuditLog = function () {
-    return this.saveNode("auditLog", DB.auditLog);
-};
-
-FirebaseService.simpanIdentitas = function () {
-    return this.saveNode("identitas", DB.identitas);
-};
-
-FirebaseService.simpanBimbingan = function () {
-    return this.saveNode("bimbingan", DB.bimbingan);
-};
-
-FirebaseService.simpanKelengkapanData = function () {
-    return this.saveNode("kelengkapanData", DB.kelengkapanData);
-};
+// 🟢 3. TAMBAHKAN FUNGSI SIMPAN LIBUR INI
+FirebaseService.simpanLibur = function () { return this.saveNode("libur", DB.libur); };
 
 FirebaseService.tambahRecord = async function (node, data) {
-
-    if (!FirebaseState.ready)
-        throw new Error("Firebase belum siap.");
-
+    if (!FirebaseState.ready) throw new Error("Firebase belum siap.");
     const ref = getNode(node).push();
-
     data.idFirebase = ref.key;
-
     await ref.set(data);
-
     return ref.key;
-
 };
 
 FirebaseService.updateRecord = async function (node, id, data) {
-
     await getNode(node + "/" + id).update(data);
-
 };
 
 FirebaseService.hapusRecord = async function (node, id) {
-
     await getNode(node + "/" + id).remove();
-
 };
-
 
 // Mengecek apakah seluruh node sudah selesai dimuat
 function cekFirebaseReady() {
@@ -607,8 +549,7 @@ function hitungUlangSemuaPoin() {
 // FUNGSI SINKRONISASI UPDATE DATA KE CLOUD ONLINE (VERSI SEHAT ANTI-ERROR & AUTO-PURGE CACHE)
 // =========================================================================
 async function simpanDataKeStorage(node) {
-
-    let targetDb = null;
+  let targetDb = null;
 
   if (typeof database !== 'undefined') {
     targetDb = database;
@@ -635,7 +576,8 @@ async function simpanDataKeStorage(node) {
     bimbingan: DB.bimbingan,
     kelengkapanData: DB.kelengkapanData,
     auditLog: DB.auditLog,
-    identitas: DB.identitas
+    identitas: DB.identitas,
+    libur: DB.libur // 🟢 TAMBAHKAN BARIS INI
   };
 
   if (!(node in dataNode)) {
@@ -644,7 +586,6 @@ async function simpanDataKeStorage(node) {
   }
 
   await targetDb.ref("kesiswaan_cloud/" + node).set(dataNode[node]);
-
   return true;
 }
 
@@ -811,6 +752,7 @@ function muatSemuaDataDariDatabase() {
         DB.auditLog = safeArray(cloudData.auditLog);
         DB.identitas = cloudData.identitas || DB.identitas;
         DB.hariAktif = cloudData.hariAktif || [];
+        DB.libur = safeArray(cloudData.libur);
 
 // 2. LOAD DATA KEHADIRAN (HIBRIDA & DEDUPLIKASI ANTI-DATA GANDA)
         DB.kehadiran = [];
@@ -2182,27 +2124,33 @@ function cetakRekapPelanggaranPerKelas() {
         siswa.poin = siswa.poinPelanggaranDasar + totalPoinSiswaIni;
       });
 
-      daftarSiswa.forEach(s => {
-        const logSiswa = dataLog.find(d => String(d.siswaId) === String(s.id));
+// Cari bagian loop siswa di jalankanFilterAbsenAdmin():
+daftarSiswa.forEach(s => {
+  const logSiswa = dataLog.find(d => String(d.siswaId) === String(s.id));
+  const infoLibur = cekKeteranganLibur(tglTerpilih); // 👈 1. Panggil helper libur
 
-        let statusBadge = '<span class="px-2.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full font-bold text-xs">🟢 Hadir</span>';
-        let keterangan = '-';
-        let poinKetidakhadiran = 0;
+  let statusBadge = '<span class="px-2.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full font-bold text-xs">🟢 Hadir</span>';
+  let keterangan = '-';
+  let poinKetidakhadiran = 0;
 
-        if (logSiswa) {
-          const st = logSiswa.status.toUpperCase();
-          keterangan = logSiswa.keterangan || '-';
-          if (st === 'A' || st === 'ALFA') {
-            statusBadge = '<span class="px-2.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full font-bold text-xs">❌ Alfa</span>';
-            poinKetidakhadiran = 3;
-          } else if (st === 'I' || st === 'IZIN') {
-            statusBadge = '<span class="px-2.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full font-bold text-xs">📩 Izin</span>';
-            poinKetidakhadiran = 1;
-          } else if (st === 'S' || st === 'SAKIT') {
-            statusBadge = '<span class="px-2.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full font-bold text-xs">🤒 Sakit</span>';
-            poinKetidakhadiran = 0.5;
-          }
-        }
+  // 👈 2. Prioritaskan jika tanggal tersebut libur
+  if (infoLibur) {
+    statusBadge = `<span class="px-2.5 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-full font-bold text-xs">🏖️ ${infoLibur.ket}</span>`;
+    keterangan = infoLibur.ket;
+  } else if (logSiswa) {
+    const st = logSiswa.status.toUpperCase();
+    keterangan = logSiswa.keterangan || '-';
+    if (st === 'A' || st === 'ALFA') {
+      statusBadge = '<span class="px-2.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full font-bold text-xs">❌ Alfa</span>';
+      poinKetidakhadiran = 3;
+    } else if (st === 'I' || st === 'IZIN') {
+      statusBadge = '<span class="px-2.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full font-bold text-xs">📩 Izin</span>';
+      poinKetidakhadiran = 1;
+    } else if (st === 'S' || st === 'SAKIT') {
+      statusBadge = '<span class="px-2.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full font-bold text-xs">🤒 Sakit</span>';
+      poinKetidakhadiran = 0.5;
+    }
+  }
 
         htmlBaris += `
       <tr class="border-t dark:border-gray-700/50 hover:bg-gray-50/50 text-xs text-gray-700 dark:text-gray-200">
@@ -2219,6 +2167,8 @@ function cetakRekapPelanggaranPerKelas() {
 
       tbody.innerHTML = htmlBaris || `<tr><td colspan="7" class="py-8 text-center text-gray-400 italic">Data rekap absensi tidak ditemukan</td></tr>`;
     }
+
+    
 
     function sinkronisasiPoinAbsenKePelanggaran() {
       if (!DB.kehadiran) return;
@@ -7708,6 +7658,9 @@ function renderRekapKetidakhadiran() {
       <button onclick="unduhRekapHarianAdmin()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
         ☀️ Rekap Harian
       </button>
+      <button onclick="renderRekapMatrixBulanan()" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+        🗓️ Matriks 1 Bulan
+      </button>
     </div>
   </div>
 
@@ -8531,6 +8484,623 @@ else {
     </tr>
   `).join('');
     }
+
+// =========================================================================
+// MODUL TAMBAHAN: REKAP MATRIKS ABSENSI BULANAN (GRID TANGGAL 1-31)
+// =========================================================================
+
+function renderRekapMatrixBulanan() {
+  const mc = document.getElementById('mainContent');
+  if (!mc) return;
+
+  const daftarKelas = [...new Set((DB.siswa || []).map(s => s.kelas).filter(Boolean))].sort();
+  const sekarang = new Date();
+  const bulanSaatIni = sekarang.getMonth() + 1;
+  const tahunSaatIni = sekarang.getFullYear();
+
+  mc.innerHTML = `
+    <div class="fade-in space-y-6">
+      <!-- HEADER & NAVIGASI -->
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 class="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
+            📊 Detail Matriks Absensi Bulanan
+          </h3>
+          <p class="text-xs text-gray-500 mt-1">Rekap visual harian tanggal 1 s.d 31 penuh berdasarkan input sekretaris.</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-3">
+          <button onclick="renderRekapKetidakhadiran()" class="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 text-gray-800 dark:text-white rounded-xl text-xs font-semibold transition">
+            ← Kembali ke Rekap Admin
+          </button>
+
+          <select id="filterKelasAbsenBulanan" onchange="generateMatrixAbsenBulanan()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-sm outline-none">
+            <option value="">-- Semua Kelas --</option>
+            ${daftarKelas.map(k => `<option value="${k}">${k}</option>`).join('')}
+          </select>
+
+          <select id="filterBulanAbsen" onchange="generateMatrixAbsenBulanan()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-sm outline-none">
+            ${['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((m, idx) => 
+              `<option value="${idx+1}" ${idx+1 === bulanSaatIni ? 'selected':''}>${m}</option>`
+            ).join('')}
+          </select>
+
+          <select id="filterTahunAbsen" onchange="generateMatrixAbsenBulanan()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-sm outline-none">
+            ${[tahunSaatIni-1, tahunSaatIni, tahunSaatIni+1].map(y => 
+              `<option value="${y}" ${y === tahunSaatIni ? 'selected':''}>${y}</option>`
+            ).join('')}
+          </select>
+          <button onclick="bukaModalLibur()" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1 shadow-sm">
+            📅 Kelola Hari Non-Efektif
+          </button>
+          <button onclick="cetakAbsenMatrix('print')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition shadow-sm">
+            🖨️ Cetak Matriks
+          </button>
+        </div>
+      </div>
+
+      <!-- KETERANGAN WARNA -->
+      <div class="flex flex-wrap items-center gap-4 text-xs font-semibold bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200">
+        <span class="text-gray-400">Status:</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-500 inline-block text-white text-center text-[10px] leading-4 font-bold">H</span> Hadir</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-amber-400 inline-block text-white text-center text-[10px] leading-4 font-bold">S</span> Sakit</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-blue-500 inline-block text-white text-center text-[10px] leading-4 font-bold">I</span> Izin</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-red-600 inline-block text-white text-center text-[10px] leading-4 font-bold">A</span> Alpa</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-black inline-block"></span> Minggu</span>
+      </div>
+
+      <!-- TABEL MATRIX -->
+      <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden p-4">
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left border-collapse border border-gray-200 dark:border-gray-700" id="tabelRekapAbsenUtama">
+            <thead id="headTabelAbsenBulanan" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 uppercase font-bold text-center"></thead>
+            <tbody id="bodyTabelAbsenBulanan" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  generateMatrixAbsenBulanan();
+}
+
+function generateMatrixAbsenBulanan() {
+  const kelas = document.getElementById('filterKelasAbsenBulanan')?.value || '';
+  const bulan = parseInt(document.getElementById('filterBulanAbsen')?.value || (new Date().getMonth() + 1));
+  const tahun = parseInt(document.getElementById('filterTahunAbsen')?.value || new Date().getFullYear());
+
+  const head = document.getElementById('headTabelAbsenBulanan');
+  const body = document.getElementById('bodyTabelAbsenBulanan');
+
+  if (!head || !body) return;
+
+  const jumlahHari = new Date(tahun, bulan, 0).getDate();
+
+  // 1. GENERATE HEADER TABEL
+  let htmlHead = `
+    <tr>
+      <th class="p-2 border border-gray-300 dark:border-gray-600 min-w-[30px] text-center" rowspan="2">No</th>
+      <th class="p-2 border border-gray-300 dark:border-gray-600 min-w-[180px] text-left" rowspan="2">Nama Siswa</th>
+      <th class="p-2 border border-gray-300 dark:border-gray-600 text-center" colspan="${jumlahHari}">Tanggal Bulan ${bulan} - ${tahun}</th>
+      <th class="p-2 border border-gray-300 dark:border-gray-600 text-center" colspan="4">Total</th>
+    </tr>
+    <tr>
+  `;
+
+  // Normalisasi data libur agar aman dicocokkan
+  const daftarLibur = (DB.libur || []).map(l => {
+    let tglStr = String(l.tanggal || l.tgl || '').trim();
+    // Jika format YYYY-M-D, ubah jadi YYYY-MM-DD
+    if (tglStr.includes('-')) {
+      const p = tglStr.split('-');
+      if (p.length === 3) {
+        tglStr = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+      }
+    }
+    return {
+      tanggal: tglStr,
+      keterangan: l.keterangan || l.ket || l.nama || 'Libur'
+    };
+  });
+
+  const mapTanggalInfo = {}; 
+  for (let d = 1; d <= jumlahHari; d++) {
+    const padDay = String(d).padStart(2, '0');
+    const padMon = String(bulan).padStart(2, '0');
+    const formatTgl = `${tahun}-${padMon}-${padDay}`;
+
+    const isMinggu = new Date(tahun, bulan - 1, d).getDay() === 0;
+    const itemLibur = daftarLibur.find(l => l.tanggal === formatTgl);
+
+    if (isMinggu) {
+      mapTanggalInfo[d] = { tipe: 'minggu', ket: '' };
+      htmlHead += `<th class="p-1 border border-gray-300 dark:border-gray-600 w-6 text-center bg-black text-white">${d}</th>`;
+    } else if (itemLibur) {
+      const ketText = itemLibur.keterangan;
+      mapTanggalInfo[d] = { tipe: 'libur', ket: ketText };
+      htmlHead += `<th class="p-1 border border-gray-300 dark:border-gray-600 w-6 text-center font-bold" style="background-color: #38bdf8 !important; color: #000000 !important;" title="${ketText}">${d}</th>`;
+    } else {
+      mapTanggalInfo[d] = { tipe: 'efektif', ket: '' };
+      htmlHead += `<th class="p-1 border border-gray-300 dark:border-gray-600 w-6 text-center">${d}</th>`;
+    }
+  }
+
+  htmlHead += `
+      <th class="p-1 border border-gray-300 dark:border-gray-600 bg-green-100 text-green-800 text-center">H</th>
+      <th class="p-1 border border-gray-300 dark:border-gray-600 bg-amber-100 text-amber-800 text-center">S</th>
+      <th class="p-1 border border-gray-300 dark:border-gray-600 bg-blue-100 text-blue-800 text-center">I</th>
+      <th class="p-1 border border-gray-300 dark:border-gray-600 bg-red-100 text-red-800 text-center">A</th>
+    </tr>
+  `;
+  head.innerHTML = htmlHead;
+
+  // 2. LOOKUP MAP KEHADIRAN
+  const mapAbsen = {};
+  const padMon = String(bulan).padStart(2, '0');
+  const prefixTgl = `${tahun}-${padMon}-`;
+
+  (DB.kehadiran || []).forEach(k => {
+    if (k && k.tanggal && k.tanggal.startsWith(prefixTgl)) {
+      const keyMap = `${String(k.siswaId).trim()}_${k.tanggal}`;
+      mapAbsen[keyMap] = String(k.status || '').toLowerCase().trim();
+    }
+  });
+
+  // 3. FILTER SISWA
+  let listSiswa = [...(DB.siswa || [])];
+  if (kelas) {
+    listSiswa = listSiswa.filter(s => s.kelas === kelas);
+  }
+
+  listSiswa.sort((a, b) => {
+    const kls = (a.kelas || '').localeCompare(b.kelas || '', 'id', { numeric: true });
+    if (kls !== 0) return kls;
+    return (a.nama || '').localeCompare(b.nama || '', 'id');
+  });
+
+  if (listSiswa.length === 0) {
+    body.innerHTML = `<tr><td colspan="${jumlahHari + 6}" class="p-4 text-center text-gray-400 italic">Tidak ada data siswa terpilih.</td></tr>`;
+    return;
+  }
+
+  // 4. RENDER ROWS SISWA
+  let htmlBody = '';
+  listSiswa.forEach((siswa, index) => {
+    let totH = 0, totS = 0, totI = 0, totA = 0;
+    const siswaIdStr = String(siswa.id).trim();
+
+    let cellHTML = '';
+    for (let d = 1; d <= jumlahHari; d++) {
+      const padDay = String(d).padStart(2, '0');
+      const keyFormat = `${siswaIdStr}_${prefixTgl}${padDay}`;
+      const statusAbsen = mapAbsen[keyFormat];
+      const tglInfo = mapTanggalInfo[d];
+
+      let cellStyle = '';
+      let cellClass = '';
+      let statusChar = '';
+
+      if (tglInfo.tipe === 'minggu') {
+        cellClass = 'bg-black text-black select-none';
+      } else if (tglInfo.tipe === 'libur') {
+        cellStyle = 'style="background-color: #38bdf8 !important; color: #000000 !important;"';
+        cellClass = 'font-bold text-[9px] leading-none select-none';
+        statusChar = tglInfo.ket || 'L'; 
+      } else if (statusAbsen) {
+        if (['h', 'hadir'].includes(statusAbsen)) {
+          cellClass = 'bg-green-500 text-white font-bold';
+          statusChar = 'H';
+          totH++;
+        } else if (['s', 'sakit'].includes(statusAbsen)) {
+          cellClass = 'bg-amber-400 text-white font-bold';
+          statusChar = 'S';
+          totS++;
+        } else if (['i', 'izin'].includes(statusAbsen)) {
+          cellClass = 'bg-blue-500 text-white font-bold';
+          statusChar = 'I';
+          totI++;
+        } else if (['a', 'alpa', 'alfa'].includes(statusAbsen)) {
+          cellClass = 'bg-red-600 text-white font-bold';
+          statusChar = 'A';
+          totA++;
+        }
+      }
+
+      cellHTML += `<td class="p-0.5 border border-gray-300 dark:border-gray-600 text-center ${cellClass}" ${cellStyle} title="${tglInfo.ket}">${statusChar}</td>`;
+    }
+
+    htmlBody += `
+      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+        <td class="p-1.5 border border-gray-300 dark:border-gray-600 text-center font-mono">${index + 1}</td>
+        <td class="p-1.5 border border-gray-300 dark:border-gray-600 font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">${siswa.nama}</td>
+        ${cellHTML}
+        <td class="p-1 border border-gray-300 dark:border-gray-600 text-center font-bold text-green-600 bg-green-50/50">${totH}</td>
+        <td class="p-1 border border-gray-300 dark:border-gray-600 text-center font-bold text-amber-600 bg-amber-50/50">${totS}</td>
+        <td class="p-1 border border-gray-300 dark:border-gray-600 text-center font-bold text-blue-600 bg-blue-50/50">${totI}</td>
+        <td class="p-1 border border-gray-300 dark:border-gray-600 text-center font-bold text-red-600 bg-red-50/50">${totA}</td>
+      </tr>
+    `;
+  });
+
+  body.innerHTML = htmlBody;
+}
+
+function cetakAbsenMatrix(mode = 'print') {
+  const kelasFilter = document.getElementById('filterKelasAbsenBulanan')?.value || '';
+  const bulanSelect = document.getElementById('filterBulanAbsen');
+  const bulan = parseInt(bulanSelect?.value || (new Date().getMonth() + 1));
+  const namaBulan = bulanSelect ? bulanSelect.options[bulanSelect.selectedIndex].text : '';
+  const tahun = parseInt(document.getElementById('filterTahunAbsen')?.value || new Date().getFullYear());
+
+  const jumlahHari = new Date(tahun, bulan, 0).getDate();
+  const padMon = String(bulan).padStart(2, '0');
+  const prefixTgl = `${tahun}-${padMon}-`;
+
+  let listSiswa = [...(DB.siswa || [])];
+  if (kelasFilter) {
+    listSiswa = listSiswa.filter(s => s.kelas === kelasFilter);
+  }
+
+  if (listSiswa.length === 0) {
+    alert("Tidak ada data siswa untuk dicetak.");
+    return;
+  }
+
+  const mapAbsen = {};
+  (DB.kehadiran || []).forEach(k => {
+    if (k && k.tanggal && k.tanggal.startsWith(prefixTgl)) {
+      const keyMap = `${String(k.siswaId).trim()}_${k.tanggal}`;
+      mapAbsen[keyMap] = String(k.status || '').toLowerCase().trim();
+    }
+  });
+
+  const dikelompokkanPerKelas = {};
+  listSiswa.forEach(siswa => {
+    const kls = siswa.kelas || 'Tanpa Kelas';
+    if (!dikelompokkanPerKelas[kls]) dikelompokkanPerKelas[kls] = [];
+    dikelompokkanPerKelas[kls].push(siswa);
+  });
+
+  Object.keys(dikelompokkanPerKelas).forEach(kls => {
+    dikelompokkanPerKelas[kls].sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
+  });
+
+  let htmlSemuaTabel = '';
+  const daftarNamaKelas = Object.keys(dikelompokkanPerKelas).sort();
+
+  daftarNamaKelas.forEach((namaKelas, idxKelas) => {
+    const siswaInKelas = dikelompokkanPerKelas[namaKelas];
+
+    let htmlHead = `
+      <thead>
+        <tr>
+          <th style="width: 25px;" rowspan="2">No</th>
+          <th style="min-width: 150px; text-align: left;" rowspan="2">Nama Siswa</th>
+          <th colspan="${jumlahHari}">Tanggal - Bulan ${namaBulan} ${tahun}</th>
+          <th colspan="4">Total</th>
+        </tr>
+        <tr>
+    `;
+
+    const mapTanggalInfo = {};
+    for (let d = 1; d <= jumlahHari; d++) {
+      const padDay = String(d).padStart(2, '0');
+      const formatTgl = `${prefixTgl}${padDay}`;
+
+      const isMinggu = new Date(tahun, bulan - 1, d).getDay() === 0;
+      const itemLibur = (DB.libur || []).find(l => l.tanggal === formatTgl);
+
+      if (isMinggu) {
+        mapTanggalInfo[d] = { tipe: 'minggu', ket: '' };
+        htmlHead += `<th class="bg-black" style="width: 18px;">${d}</th>`;
+      } else if (itemLibur) {
+        mapTanggalInfo[d] = { tipe: 'libur', ket: itemLibur.keterangan || 'Libur' };
+        htmlHead += `<th class="bg-sky-blue" style="width: 18px;">${d}</th>`;
+      } else {
+        mapTanggalInfo[d] = { tipe: 'efektif', ket: '' };
+        htmlHead += `<th style="width: 18px;">${d}</th>`;
+      }
+    }
+
+    htmlHead += `
+        <th style="background-color: #dcfce7 !important; color: #166534;">H</th>
+        <th style="background-color: #fef3c7 !important; color: #92400e;">S</th>
+        <th style="background-color: #dbeafe !important; color: #1e40af;">I</th>
+        <th style="background-color: #fee2e2 !important; color: #991b1b;">A</th>
+      </tr>
+      </thead>
+    `;
+
+    let htmlBody = '<tbody>';
+    siswaInKelas.forEach((siswa, index) => {
+      let totH = 0, totS = 0, totI = 0, totA = 0;
+      const siswaIdStr = String(siswa.id).trim();
+
+      let cellHTML = '';
+      for (let d = 1; d <= jumlahHari; d++) {
+        const padDay = String(d).padStart(2, '0');
+        const keyFormat = `${siswaIdStr}_${prefixTgl}${padDay}`;
+        const statusAbsen = mapAbsen[keyFormat];
+        const tglInfo = mapTanggalInfo[d];
+
+        let cellClass = '';
+        let statusChar = '';
+
+        if (tglInfo.tipe === 'minggu') {
+          cellClass = 'bg-black';
+        } else if (tglInfo.tipe === 'libur') {
+          cellClass = 'bg-sky-blue';
+          statusChar = tglInfo.ket;
+        } else if (statusAbsen) {
+          if (['h', 'hadir'].includes(statusAbsen)) { cellClass = 'bg-green-500'; statusChar = 'H'; totH++; }
+          else if (['s', 'sakit'].includes(statusAbsen)) { cellClass = 'bg-amber-400'; statusChar = 'S'; totS++; }
+          else if (['i', 'izin'].includes(statusAbsen)) { cellClass = 'bg-blue-500'; statusChar = 'I'; totI++; }
+          else if (['a', 'alpa', 'alfa'].includes(statusAbsen)) { cellClass = 'bg-red-600'; statusChar = 'A'; totA++; }
+        }
+
+        cellHTML += `<td class="${cellClass}">${statusChar}</td>`;
+      }
+
+      htmlBody += `
+        <tr>
+          <td>${index + 1}</td>
+          <td style="text-align: left; font-weight: bold; white-space: nowrap;">${siswa.nama}</td>
+          ${cellHTML}
+          <td style="font-weight: bold; background-color: #f0fdf4;">${totH}</td>
+          <td style="font-weight: bold; background-color: #fffbeb;">${totS}</td>
+          <td style="font-weight: bold; background-color: #eff6ff;">${totI}</td>
+          <td style="font-weight: bold; background-color: #fef2f2;">${totA}</td>
+        </tr>
+      `;
+    });
+    htmlBody += '</tbody>';
+
+    htmlSemuaTabel += `
+      <div class="block-kelas ${idxKelas > 0 ? 'page-break' : ''}">
+        <div class="pemisah-kelas">
+          📍 KELAS: ${namaKelas}
+        </div>
+        <table>
+          ${htmlHead}
+          ${htmlBody}
+        </table>
+      </div>
+    `;
+  });
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Matriks Absensi Bulanan - ${namaBulan} ${tahun}</title>
+      <style>
+        @page { size: A4 landscape; margin: 8mm; }
+        body { font-family: Arial, sans-serif; font-size: 8pt; color: #000; padding: 5px; }
+        .kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 5px; margin-bottom: 12px; }
+        .kop h2 { margin: 0; font-size: 11pt; }
+        .kop h1 { margin: 2px 0; font-size: 14pt; }
+        .kop p { margin: 0; font-size: 8pt; font-style: italic; }
+        
+        .pemisah-kelas { 
+          background-color: #1e293b; 
+          color: #ffffff; 
+          font-size: 10pt; 
+          font-weight: bold; 
+          padding: 6px 10px; 
+          margin-top: 15px; 
+          margin-bottom: 6px; 
+          border-radius: 4px;
+          -webkit-print-color-adjust: exact;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-bottom: 10px; }
+        th, td { border: 1px solid #000 !important; padding: 3px 1px; text-align: center; }
+        th { background-color: #f2f2f2 !important; font-weight: bold; -webkit-print-color-adjust: exact; }
+        
+        .bg-black { background-color: #000000 !important; color: #000000 !important; -webkit-print-color-adjust: exact; }
+        .bg-sky-blue { background-color: #7dd3fc !important; color: #000000 !important; font-size: 6.5pt; font-weight: bold; -webkit-print-color-adjust: exact; }
+        .bg-green-500 { background-color: #22c55e !important; color: white !important; font-weight: bold; -webkit-print-color-adjust: exact; }
+        .bg-amber-400 { background-color: #f59e0b !important; color: white !important; font-weight: bold; -webkit-print-color-adjust: exact; }
+        .bg-blue-500 { background-color: #3b82f6 !important; color: white !important; font-weight: bold; -webkit-print-color-adjust: exact; }
+        .bg-red-600 { background-color: #dc2626 !important; color: white !important; font-weight: bold; -webkit-print-color-adjust: exact; }
+
+        .page-break { page-break-before: always; }
+        .ttd-box { float: right; margin-top: 15px; width: 230px; text-align: center; page-break-inside: avoid; }
+        .space { height: 45px; }
+      </style>
+    </head>
+    <body>
+      <div class="kop">
+        <h2>PEMERINTAH PROVINSI SULAWESI TENGAH</h2>
+        <h1>SMK NEGERI 1 MEPANGA</h1>
+        <p>Jalan Nusantara No 116, Desa Kayu Agung, Kecamatan Mepanga</p>
+      </div>
+
+      <div style="text-align:center; font-weight:bold; margin-bottom: 8px;">
+        REKAPITULASI DETAIL PRESENSI BULANAN SISWA<br>
+        <span style="font-size:9pt; font-weight:normal;">Periode: ${namaBulan} ${tahun}</span>
+      </div>
+
+      ${htmlSemuaTabel}
+
+      <div class="ttd-box">
+        <p>Mepanga, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+        <p>Kepala Sekolah,</p>
+        <div class="space"></div>
+        <p style="font-weight:bold; text-decoration:underline;">Joko Sarwono, S.Pd.</p>
+        <p>NIP. 196610161991031010</p>
+      </div>
+    </body>
+    </html>
+  `);
+  win.document.close();
+  setTimeout(() => { win.print(); }, 500);
+}
+
+// =========================================================================
+// MODAL & KELOLA HARI NON-EFEKTIF / LIBUR
+// =========================================================================
+
+function bukaModalLibur() {
+  let modal = document.getElementById('modalKelolaLibur');
+  if (!modal) {
+    const div = document.createElement('div');
+    div.id = 'modalKelolaLibur';
+    div.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 fade-in';
+    document.body.appendChild(div);
+    modal = div;
+  }
+
+  renderIsiModalLibur();
+}
+
+function renderIsiModalLibur() {
+  const modal = document.getElementById('modalKelolaLibur');
+  if (!modal) return;
+
+  const listLibur = DB.libur || [];
+
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 dark:border-gray-700 space-y-4">
+      <div class="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+        <h3 class="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+          📅 Kelola Hari Non-Efektif
+        </h3>
+        <button onclick="tutupModalLibur()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold">&times;</button>
+      </div>
+
+      <!-- FORM TAMBAH -->
+      <div class="space-y-3 bg-gray-50 dark:bg-gray-700/40 p-3 rounded-xl border border-gray-200 dark:border-gray-600">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tanggal Non-Efektif</label>
+          <input type="date" id="inputTglLibur" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-800 dark:text-white outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Keterangan (misal: Tanggal Merah / Rapat Guru)</label>
+          <input type="text" id="inputKetLibur" placeholder="Keterangan..." class="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-800 dark:text-white outline-none">
+        </div>
+        <button onclick="simpanHariLibur()" class="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition">
+          + Tambahkan Hari Libur
+        </button>
+      </div>
+
+      <!-- DAFTAR LIBUR -->
+      <div class="max-h-48 overflow-y-auto space-y-2 pr-1">
+        <p class="text-xs font-bold text-gray-500">Daftar Hari Non-Efektif Tersimpan:</p>
+        ${listLibur.length === 0 ? '<p class="text-xs text-gray-400 italic">Belum ada hari libur ditambahkan.</p>' : ''}
+        ${listLibur.map((item, idx) => `
+          <div class="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-xs">
+            <div>
+              <span class="font-mono font-bold text-rose-600 dark:text-rose-400">${item.tanggal}</span>
+              <span class="text-gray-600 dark:text-gray-300 ml-2">(${item.keterangan || 'Libur'})</span>
+            </div>
+            <button onclick="hapusHariLibur(${idx})" class="text-red-500 hover:text-red-700 font-bold px-2 py-1">✕</button>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="pt-2 border-t dark:border-gray-700 flex justify-end">
+        <button onclick="tutupModalLibur()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-xs font-semibold">
+          Selesai
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function simpanHariLibur() {
+  const tgl = document.getElementById('inputTglLibur')?.value;
+  const ket = document.getElementById('inputKetLibur')?.value || 'Hari Non-Efektif';
+
+  if (!tgl) {
+    alert("Pilih tanggal terlebih dahulu!");
+    return;
+  }
+
+  DB.libur = DB.libur || [];
+  if (DB.libur.some(x => x && x.tanggal === tgl)) {
+    alert("Tanggal ini sudah terdaftar sebagai hari libur!");
+    return;
+  }
+
+  // Push data baru (tambahkan ID unik agar konsisten)
+  DB.libur.push({ 
+    id: Date.now(), 
+    tanggal: tgl, 
+    keterangan: ket 
+  });
+
+  // 1. SIMPAN KE LOCALSTORAGE
+  localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
+
+  // 2. SIMPAN KE FIREBASE DATABASE
+  try {
+    if (typeof simpanDataKeStorage === 'function') {
+      await simpanDataKeStorage('libur');
+    } else if (typeof simpanDataKeCloud === 'function') {
+      simpanDataKeCloud('libur', DB.libur);
+    }
+  } catch (error) {
+    console.error("Gagal menyimpan ke Firebase:", error);
+  }
+
+  // 3. REFRESH TAMPILAN & FORM
+  if (typeof renderIsiModalLibur === 'function') renderIsiModalLibur();
+  if (typeof generateMatrixAbsenBulanan === 'function') generateMatrixAbsenBulanan();
+
+  // Reset input form setelah berhasil
+  const inputTgl = document.getElementById('inputTglLibur');
+  const inputKet = document.getElementById('inputKetLibur');
+  if (inputTgl) inputTgl.value = '';
+  if (inputKet) inputKet.value = '';
+
+  alert("Hari non-efektif berhasil disimpan!");
+}
+
+function hapusHariLibur(index) {
+  if (confirm("Hapus hari non-efektif ini?")) {
+    DB.libur.splice(index, 1);
+
+    // 1. SIMPAN PERUBAHAN KE LOCALSTORAGE
+    localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
+
+    // 2. Panggil fungsi simpan global jika ada
+    if (typeof simpanDB === 'function') simpanDB();
+    if (typeof simpanDataKeCloud === 'function') simpanDataKeCloud('libur', DB.libur);
+
+    renderIsiModalLibur();
+    if (typeof generateMatrixAbsenBulanan === 'function') generateMatrixAbsenBulanan();
+  }
+}
+
+function tutupModalLibur() {
+  const modal = document.getElementById('modalKelolaLibur');
+  if (modal) modal.remove();
+}
+
+// Fungsi Helper: Cek apakah suatu tanggal adalah Hari Libur / Non-Efektif
+function cekKeteranganLibur(tanggalString) {
+  if (!tanggalString) return null;
+
+  // Ubah YYYY-MM-DD menjadi YYYY/MM/DD agar dibaca sebagai waktu lokal
+  const dateObj = new Date(tanggalString.replace(/-/g, '/'));
+  const dayOfWeek = dateObj.getDay(); // 0 = Minggu, 6 = Sabtu
+
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return { isLibur: true, ket: "Akhir Pekan (Non-Efektif)" };
+  }
+
+  if (Array.isArray(DB.libur) && DB.libur.length > 0) {
+    const itemLibur = DB.libur.find(l => l.tanggal === tanggalString);
+    if (itemLibur) {
+      return { isLibur: true, ket: itemLibur.keterangan || "Hari Libur Sekolah" };
+    }
+  }
+
+  return null;
+}
 
     // ====================================================
     // LANGKAH 2: FUNGSI OTOMATISASI AMBANG BATAS POIN (TATA TERTIB SEKOLAH)
