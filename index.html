@@ -3343,6 +3343,7 @@ function renderAdminKelas() {
             <tr>
               <th class="text-left py-3 px-4">No</th>
               <th class="text-left py-3 px-4">Nama Kelas</th>
+              <th class="text-left py-3 px-4">Wali Kelas</th>
               <th class="text-left py-3 px-4">Rincian Siswa ( Total / L / P )</th>
               <th class="text-left py-3 px-4">Aksi</th>
             </tr>
@@ -3368,14 +3369,22 @@ function renderAdminKelas() {
 
 function filterKelasAdmin() {
   document.getElementById('bodyKelas').innerHTML = DB.kelas.map((k, i) => {
-    // Filter siswa berdasarkan kelas
+    // 1. Cari data Wali Kelas dari DB.users
+    const walasObj = (DB.users || []).find(u => 
+      u.role === 'walas' && 
+      String(u.kelasBinaan || '').toLowerCase().trim() === String(k).toLowerCase().trim()
+    );
+
+    const namaWalas = walasObj ? (walasObj.nama || walasObj.username) : '<span class="text-gray-400 italic text-xs">Belum Ditentukan</span>';
+
+    // 2. Filter siswa berdasarkan kelas
     const siswaDiKelas = DB.siswa.filter(s => s.kelas === k);
     const jmlTotal = siswaDiKelas.length;
 
-    // Hitung Laki-laki dan Perempuan berdasarkan atribut gender / jk
+    // 3. Hitung Laki-laki dan Perempuan
     let jmlL = 0;
     let jmlP = 0;
-    siswaInKelas = siswaDiKelas.forEach(s => {
+    siswaDiKelas.forEach(s => {
       const jk = String(s.jenisKelamin || s.jk || s.gender || '').toUpperCase().trim();
       if (jk === 'L' || jk === 'LAKI-LAKI' || jk === 'LAKI LAKI') {
         jmlL++;
@@ -3386,7 +3395,13 @@ function filterKelasAdmin() {
 
     return `<tr class="border-t dark:border-gray-700/50">
       <td class="py-3 px-4">${i + 1}</td>
-      <td class="py-3 px-4 font-medium">${k}</td>
+      <td class="py-3 px-4 font-semibold text-gray-800 dark:text-gray-100">${k}</td>
+      <td class="py-3 px-4">
+        <div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+          <i data-lucide="user-check" class="w-3.5 h-3.5 text-teal-600 dark:text-teal-400"></i>
+          <span>${namaWalas}</span>
+        </div>
+      </td>
       <td class="py-3 px-4">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold" title="Total Siswa">
@@ -3405,9 +3420,9 @@ function filterKelasAdmin() {
         <button onclick="deleteKelas('${k}')" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="4" class="py-8 text-center text-gray-400">Belum ada kelas</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="py-8 text-center text-gray-400">Belum ada kelas</td></tr>';
   
-  lucide.createIcons();
+  if (window.lucide) lucide.createIcons();
 }
 
 function showFormKelas(editData = null) {
@@ -3438,6 +3453,12 @@ async function saveKelas(oldNama) {
       DB.kelas[idx] = newNama;
       // Update siswa yang terkait
       DB.siswa.forEach(s => { if (s.kelas === oldNama) s.kelas = newNama; });
+      // Update kelas binaan wali kelas jika nama kelas berubah
+      (DB.users || []).forEach(u => {
+        if (u.role === 'walas' && String(u.kelasBinaan).toLowerCase() === String(oldNama).toLowerCase()) {
+          u.kelasBinaan = newNama;
+        }
+      });
       addAuditLog('Edit Kelas: ' + oldNama + ' → ' + newNama);
       showToast('Kelas berhasil diubah', 'success');
     }
@@ -3451,6 +3472,9 @@ async function saveKelas(oldNama) {
   
   // WAJIB
   await simpanDataKeStorage("kelas");
+  if (oldNama && typeof simpanDataKeStorage === 'function') {
+    await simpanDataKeStorage("users");
+  }
 
   document.getElementById('formKelasContainer').classList.add('hidden');
   filterKelasAdmin();
@@ -3510,30 +3534,18 @@ function importKelasExcel(e) {
   e.target.value = '';
 }
 
-    // ===== ADMIN CRUD =====
-   // ====================================================
-    // 1. RENDER HALAMAN UTAMA KELOLA GURU (SUDAH DITAMBAH SUB-BUTTON SISWA KELAS)
-    // ====================================================
-    function renderAdminGuru() {
-      const mc = document.getElementById('mainContent');
-      
-      // PERBAIKAN: Hanya saring user yang role-nya adalah bagian dari kesiswaan/guru (bukan admin & bukan sekretaris)
-      const guru = (DB.users || [])
-.filter(
-    u => u.role !== 'admin' &&
-         u.role !== 'sekretaris'
-)
-.sort((a,b)=>{
-
-    // Urut berdasarkan nama A-Z
-    return (a.name || "").localeCompare(
-        b.name || "",
-        'id'
-    );
-
-});
-      
-      mc.innerHTML = `<div class="fade-in space-y-4">
+// ====================================================
+// RENDER DASHBOARD & TABEL GURU / STAF (TOMBOL EDIT DITAMBAHKAN)
+// ====================================================
+function renderAdminGuru() {
+  const mc = document.getElementById('mainContent');
+  if (!mc) return;   
+  
+  const guru = (DB.users || [])
+    .filter(u => u.role !== 'admin' && u.role !== 'sekretaris')
+    .sort((a,b) => (a.name || "").localeCompare(b.name || "", 'id'));
+  
+  mc.innerHTML = `<div class="fade-in space-y-4">
     <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-3">
       <button onclick="showFormGuru()" class="px-4 py-2 bg-primary-600 text-white rounded-xl text-sm hover:bg-primary-700 font-semibold flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>Tambah Guru / Staf</button>
       <button onclick="downloadGuruTemplate()" class="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>Download Template</button>
@@ -3549,7 +3561,15 @@ function importKelasExcel(e) {
     <div id="kontenUtamaGuruSistem" class="space-y-4">
       <div id="formGuruContainer" class="hidden"></div>
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50 dark:bg-gray-700/50"><tr><th class="text-left py-3 px-4">Nama</th><th class="text-left py-3 px-4">NIP</th><th class="text-left py-3 px-4">Jabatan / Role</th><th class="text-left py-3 px-4">Detail Tugas</th><th class="text-left py-3 px-4">Username</th><th class="text-left py-3 px-4">Aksi</th></tr></thead><tbody>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50 dark:bg-gray-700/50"><tr>
+          <th class="text-left py-3 px-4">Nama</th>
+          <th class="text-left py-3 px-4">NIP</th>
+          <th class="text-left py-3 px-4">No. WhatsApp</th>
+          <th class="text-left py-3 px-4">Jabatan / Role</th>
+          <th class="text-left py-3 px-4">Detail Tugas</th>
+          <th class="text-left py-3 px-4">Username</th>
+          <th class="text-left py-3 px-4">Aksi</th>
+        </tr></thead><tbody>
         ${guru.map(g => {
           let teksRole = 'Guru Biasa';
           let detailTugas = g.mapel || '-';
@@ -3558,152 +3578,67 @@ function importKelasExcel(e) {
           else if (g.role === 'wakasis') { teksRole = 'Wakasis'; detailTugas = 'Kesiswaan'; }
           
           return `<tr class="border-t dark:border-gray-700/50">
-            <td class="py-3 px-4 font-medium">${g.name}</td>
+            <td class="py-3 px-4 font-medium">${g.name || g.nama || '-'}</td>
             <td class="py-3 px-4">${g.nip || '-'}</td>
+            <td class="py-3 px-4 font-semibold text-green-600">${g.noWa ? `📱 ${g.noWa}` : '-'}</td>
             <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs font-semibold ${g.role === 'walas' ? 'bg-green-100 text-green-800' : g.role === 'bk' ? 'bg-purple-100 text-purple-800' : g.role === 'wakasis' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}">${teksRole}</span></td>
             <td class="py-3 px-4">${detailTugas}</td>
-            <td class="py-3 px-4">${g.username}</td>
-            <td class="py-3 px-4 flex gap-2"><button onclick="editGuru('${g.id}')" class="text-blue-500 hover:text-blue-700"><i data-lucide="edit" class="w-4 h-4"></i></button><button onclick="deleteUser('${g.id}')" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
+            <td class="py-3 px-4">${g.username || '-'}</td>
+            
+            <td class="py-3 px-4 flex items-center gap-2">
+              <!-- PERBAIKAN 1: g.id menggantikan u.id -->
+              <button onclick="editGuru('${g.id}')" class="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors">
+                <i data-lucide="pencil" class="w-4 h-4"></i> Edit
+              </button>
+              <button onclick="deleteUser('${g.id}')" title="Hapus Guru" class="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </td>
           </tr>`;
         }).join('')}
         </tbody></table></div>
       </div>
       <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
         <h4 class="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">Format Template Import Excel/CSV Guru:</h4>
-        <p class="text-sm text-yellow-800 dark:text-yellow-300 mb-2"><strong>Kolom wajib (urutan penting):</strong> Nama, NIP, Mata Pelajaran, Username, Password, Role, Kelas Binaan</p>
+        <p class="text-sm text-yellow-800 dark:text-yellow-300 mb-2"><strong>Kolom wajib (urutan penting):</strong> Nama, NIP, No WhatsApp, Mata Pelajaran, Username, Password, Role, Kelas Binaan</p>
         <p class="text-xs text-yellow-700 dark:text-yellow-400">💡 Kode Jabatan: <strong>guru</strong> (Guru Biasa), <strong>walas</strong> (Wali Kelas), <strong>bk</strong> (Guru BK), <strong>wakasis</strong> (Wakasis)</p>
       </div>
     </div>
-    </div>`;
-      lucide.createIcons();
-    }
+  </div>`;
+    
+  if (window.lucide) lucide.createIcons();
+}
 
-    // ====================================================
-    // 2. FUNGSI LOGIKA MENAMPILKAN TABEL SISWA KELAS BINAAN WALAS
-    // ====================================================
-    function tampilkanDaftarSiswaMataWalas() {
-      const wadahSiswa = document.getElementById('wadahKhususSiswaWalas');
-      const kontenGuru = document.getElementById('kontenUtamaGuruSistem');
-      
-      if (!wadahSiswa || !kontenGuru) return;
+function editGuru(id) { 
+  const g = (DB.users || []).find(u => String(u.id) === String(id)); 
+  if (g) {
+    showFormGuru(g);
+    const formContainer = document.getElementById('formGuruContainer');
+    if (formContainer) formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    if (typeof showToast === 'function') showToast('Data guru tidak ditemukan!', 'error');
+  }
+}
 
-      // Jika tabel siswa sedang terbuka, klik lagi untuk menutup / kembali ke data guru
-      if (!wadahSiswa.classList.contains('hidden')) {
-        wadahSiswa.classList.add('hidden');
-        kontenGuru.classList.remove('hidden');
-        return;
-      }
-
-      // Ambil data user yang sedang login saat ini
-      const userLogin = typeof currentUser !== 'undefined' ? currentUser : (JSON.parse(localStorage.getItem('sik_user_login')) || {});
-      
-      // Mengunci target kelas (jika yang login walas ambil kelas binaannya, jika admin set default ke X TKJ 1)
-      const kelasTarget = userLogin.kelasBinaan || 'X TKJ 1';
-
-      // 1. Ambil data siswa yang sekelas dengan kelas target
-      let siswaKelas = (DB.siswa || []).filter(s => s.kelas === kelasTarget);
-
-      // 2. Hitung akumulasi total poin pelanggaran tiap siswa dari DB.pelanggaran
-      siswaKelas = siswaKelas.map(s => {
-        const totalPoin = (DB.pelanggaran || [])
-          .filter(p => String(p.nisn) === String(s.nisn))
-          .reduce((sum, item) => sum + Number(item.poin || 0), 0);
-        return { ...s, totalPoin: totalPoin };
-      });
-
-      // 3. LOGIKA UTAMA: URUTKAN BERDASARKAN POIN TERBANYAK (Descending)
-      siswaKelas.sort((a, b) => b.totalPoin - a.totalPoin);
-
-      // Sembunyikan daftar guru, munculkan wadah tabel siswa
-      kontenGuru.classList.add('hidden');
-      wadahSiswa.classList.remove('hidden');
-
-      // 4. Bangun isi tabel pemantauan progres 4 tahap
-      let htmlTabel = `
-      <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-4 text-white shadow-sm flex justify-between items-center">
-        <div>
-          <h4 class="font-bold text-base">Monitoring Poin Siswa Kelas: ${kelasTarget}</h4>
-          <p class="text-xs opacity-90">Diurutkan otomatis berdasarkan akumulasi poin pelanggaran terbanyak.</p>
-        </div>
-        <button onclick="tampilkanDaftarSiswaMataWalas()" class="px-3 py-1.5 bg-white text-purple-700 rounded-lg text-xs font-bold hover:bg-gray-100">⬅ Kembali ke Data Guru</button>
-      </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 uppercase">
-              <tr>
-                <th class="py-3 px-4 text-center w-12">No</th>
-                <th class="py-3 px-4 text-left">Nama Siswa</th>
-                <th class="py-3 px-4 text-center">Total Poin</th>
-                <th class="py-3 px-4 text-left">Progres Pembinaan (4 Tahap)</th>
-                <th class="py-3 px-4 text-center">Keterangan Otoritas</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">`;
-
-      if (siswaKelas.length === 0) {
-        htmlTabel += `<tr><td colspan="5" class="p-8 text-center text-gray-400">Tidak ditemukan data siswa terdaftar di kelas ${kelasTarget}. Silakan import data siswa terlebih dahulu.</td></tr>`;
-      } else {
-        siswaKelas.forEach((s, index) => {
-          // Logika pembagian 4 progres bimbingan kesiswaan
-          let progresTeks = "🟢 Tahap 1: Pembinaan Wali Kelas";
-          let warnaProgres = "text-green-600 bg-green-50 dark:bg-green-950/20";
-          let statusOtoritas = "⏳ Menunggu Tindakan Walas";
-          let warnaOtoritas = "bg-yellow-100 text-yellow-800";
-
-          if (s.totalPoin >= 75) {
-            progresTeks = "🔴 Tahap 4: Kasus Wakasis (Skorsing/DO)";
-            warnaProgres = "text-red-600 bg-red-50 dark:bg-red-950/20";
-          } else if (s.totalPoin >= 50) {
-            progresTeks = "🟣 Tahap 3: Penanganan Guru BK (Konseling)";
-            warnaProgres = "text-purple-600 bg-purple-50 dark:bg-purple-950/20";
-          } else if (s.totalPoin >= 15) {
-            progresTeks = "🔵 Tahap 2: Teguran Tertulis & Panggilan Ortu";
-            warnaProgres = "text-blue-600 bg-blue-50 dark:bg-blue-950/20";
-          }
-
-          if (s.totalPoin === 0) {
-            progresTeks = "✨ Siswa Teladan (0 Poin)";
-            warnaProgres = "text-gray-500 bg-gray-50 dark:bg-gray-800";
-            statusOtoritas = "✅ Aman";
-            warnaOtoritas = "bg-green-100 text-green-800";
-          } else {
-            if (s.totalPoin >= 75) { statusOtoritas = "🚨 Tindakan Wakasis!"; warnaOtoritas = "bg-red-100 text-red-800 font-bold animate-pulse"; }
-            else if (s.totalPoin >= 50) { statusOtoritas = "💼 Proses Serah Guru BK"; warnaOtoritas = "bg-purple-100 text-purple-800"; }
-            else if (s.totalPoin >= 15) { statusOtoritas = "📋 Butuh SP Wali Kelas"; warnaOtoritas = "bg-blue-100 text-blue-800"; }
-          }
-
-          htmlTabel += `
-          <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
-            <td class="py-3 px-4 text-center text-gray-400 font-medium">${index + 1}</td>
-            <td class="py-3 px-4 font-semibold text-gray-900 dark:text-white">${s.nama || s.namaSiswa}<span class="block text-[10px] text-gray-400 font-normal">NISN: ${s.nisn || '-'}</span></td>
-            <td class="py-3 px-4 text-center"><span class="px-2.5 py-0.5 rounded text-xs font-bold ${s.totalPoin >= 50 ? 'bg-red-100 text-red-700' : s.totalPoin >= 15 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">${s.totalPoin} Poin</span></td>
-            <td class="py-3 px-4"><span class="px-2.5 py-1 rounded-xl text-xs font-medium ${warnaProgres}">${progresTeks}</span></td>
-            <td class="py-3 px-4 text-center"><span class="px-2 py-0.5 rounded text-xs font-semibold ${warnaOtoritas}">${statusOtoritas}</span></td>
-          </tr>`;
-        });
-      }
-
-      htmlTabel += `</tbody></table></div></div>`;
-      wadahSiswa.innerHTML = htmlTabel;
-    }
-
-// ====================================================
-    // 2. FORM TAMBAH / EDIT GURU & JABATAN (DINAMIS)
-    // ====================================================
-    function showFormGuru(editData = null) {
-      const c = document.getElementById('formGuruContainer');
-      c.classList.remove('hidden');
-      c.innerHTML = `<div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+function showFormGuru(editData = null) {
+  const c = document.getElementById('formGuruContainer');
+  if (!c) return;
+  
+  c.classList.remove('hidden');
+  c.innerHTML = `<div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
     <h4 class="font-semibold mb-3">${editData ? 'Edit' : 'Tambah'} Guru / Staf</h4>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div><label class="block text-sm mb-1" for="fgNama">Nama</label><input id="fgNama" value="${editData ? editData.name : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
+      <div><label class="block text-sm mb-1" for="fgNama">Nama</label><input id="fgNama" value="${editData ? editData.name || editData.nama || '' : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
       <div><label class="block text-sm mb-1" for="fgNIP">NIP</label><input id="fgNIP" value="${editData ? editData.nip || '' : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
       
       <div>
+        <label class="block text-sm mb-1 font-semibold text-green-600 dark:text-green-400" for="fgWa">No. WhatsApp Wali Kelas / Guru</label>
+        <input id="fgWa" value="${editData ? editData.noWa || editData.hp || '' : ''}" placeholder="Contoh: 081234567890" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm">
+      </div>
+
+      <div>
         <label class="block text-sm mb-1 font-semibold text-blue-600 dark:text-blue-400" for="fgRole">Jabatan / Akses Sistem</label>
-        <select id="fgRole" onchange="handleRoleFormChange(this.value)" class="w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 dark:border-gray-600 text-sm">
+        <select id="fgRole" onchange="if(typeof handleRoleFormChange==='function') handleRoleFormChange(this.value)" class="w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 dark:border-gray-600 text-sm">
           <option value="guru" ${editData && editData.role === 'guru' ? 'selected' : ''}>Guru Biasa</option>
           <option value="walas" ${editData && editData.role === 'walas' ? 'selected' : ''}>Wali Kelas</option>
           <option value="bk" ${editData && editData.role === 'bk' ? 'selected' : ''}>Guru BK</option>
@@ -3712,190 +3647,147 @@ function importKelasExcel(e) {
       </div>
 
       <div id="boxDetailTugas">
-        <label class="block text-sm mb-1" id="labelDetailTugas" for="fgDetail">Mata Pelajaran</label>
+        <label class="block text-sm mb-1" id="labelDetailTugas" for="fgDetail">Mata Pelajaran / Kelas</label>
         <input id="fgDetail" value="${editData ? (editData.role === 'walas' ? editData.kelasBinaan || '' : editData.mapel || '') : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm" placeholder="Contoh: Matematika atau X TKJ 1">
       </div>
 
-      <div><label class="block text-sm mb-1" for="fgUser">Username</label><input id="fgUser" value="${editData ? editData.username : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
-      <div><label class="block text-sm mb-1" for="fgPass">Password</label><input id="fgPass" type="password" value="${editData ? editData.password : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
+      <div><label class="block text-sm mb-1" for="fgUser">Username</label><input id="fgUser" value="${editData ? editData.username || '' : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
+      <div><label class="block text-sm mb-1" for="fgPass">Password</label><input id="fgPass" type="password" value="${editData ? editData.password || '' : ''}" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></div>
     </div>
     <div class="mt-4 flex gap-2">
-      <button onclick="saveGuru(${editData ? `'${editData.id}'` : 'null'})" class="px-4 py-2 bg-primary-600 text-white rounded-xl text-sm hover:bg-primary-700">Simpan</button>
-      <button onclick="document.getElementById('formGuruContainer').classList.add('hidden')" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-xl text-sm">Batal</button>
+      <!-- PERBAIKAN 2: Mengirim ID data ke saveGuru -->
+      <button onclick="saveGuru(${editData ? `'${editData.id}'` : 'null'})" class="px-4 py-2 bg-primary-600 text-white rounded-xl text-sm hover:bg-primary-700 font-semibold">Simpan Perubahan</button>
+      <button onclick="document.getElementById('formGuruContainer').classList.add('hidden')" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-xl text-sm font-semibold">Batal</button>
     </div>
   </div>`;
-      
-      // PERBAIKAN DI SINI: Otomatis memicu perubahan label teks saat form edit dibuka
-      if(editData) {
-        handleRoleFormChange(editData.role || 'guru');
-      }
-    }
-
-    // Merubah teks kotak isian form otomatis menyesuaikan jabatan yang dipilih
-    window.handleRoleFormChange = function(role) {
-      const label = document.getElementById('labelDetailTugas');
-      const input = document.getElementById('fgDetail');
-      if(!label || !input) return;
-      
-      if(role === 'walas') {
-        label.innerText = "Kelas Binaan (Wajib Diisi)";
-        input.placeholder = "Contoh: X TKJ 1";
-      } else if(role === 'guru') {
-        label.innerText = "Mata Pelajaran";
-        input.placeholder = "Contoh: Matematika";
-      } else {
-        label.innerText = "Keterangan Tambahan";
-        input.placeholder = "-";
-      }
-    }
-
-    // ====================================================
-    // 3. PROSES AKSI (EDIT, SIMPAN, HAPUS) DATA GURU
-    // ====================================================
-    function editGuru(id) { 
-      const g = DB.users.find(u => String(u.id) === String(id)); 
-      if (g) showFormGuru(g); 
-    }
-    
-    async function saveGuru(id) {
-      const r = document.getElementById('fgRole').value;
-      const detailVal = document.getElementById('fgDetail').value.trim();
-      
-      const data = { 
-        name: document.getElementById('fgNama').value.trim(), 
-        nip: document.getElementById('fgNIP').value.trim(), 
-        username: document.getElementById('fgUser').value.trim(), 
-        password: document.getElementById('fgPass').value, 
-        role: r,
-        mapel: r === 'guru' ? detailVal : '',
-        kelasBinaan: r === 'walas' ? detailVal.toUpperCase() : '' 
-      };
-      
-      if (!data.name || !data.username || !data.password) { showToast('Lengkapi Nama, Username dan Password!', 'error'); return; }
-      if (r === 'walas' && !data.kelasBinaan) { showToast('Wali kelas wajib mengisi Kelas Binaan!', 'error'); return; }
-
-      if (id && id !== 'null') { 
-        const idx = DB.users.findIndex(u => String(u.id) === String(id)); 
-        if (idx > -1) Object.assign(DB.users[idx], data); 
-} else { 
-    data.id = 'USR-' + Date.now(); 
-    if (!DB.users) DB.users = [];
-    DB.users.push(data);
+  
+  if (typeof handleRoleFormChange === 'function') {
+    handleRoleFormChange(editData ? editData.role : 'guru');
+  }
 }
 
-// ===============================
-// URUTKAN USER SETELAH DISIMPAN
-// ===============================
-DB.users.sort((a, b) => {
+// PERBAIKAN 3 & 4: Menyerap idGuru sebagai parameter & mengambil nilai elemen fg* yang sesuai
+async function saveGuru(idGuru = null) {
+  const nama = document.getElementById('fgNama')?.value.trim() || '';
+  const nip = document.getElementById('fgNIP')?.value.trim() || '-';
+  const noWa = document.getElementById('fgWa')?.value.trim() || '';
+  const role = document.getElementById('fgRole')?.value.trim().toLowerCase() || 'guru';
+  const detail = document.getElementById('fgDetail')?.value.trim() || '';
+  const username = document.getElementById('fgUser')?.value.trim() || '';
+  const password = document.getElementById('fgPass')?.value.trim() || '';
 
-    // Admin paling atas
-    if (a.role === 'admin' && b.role !== 'admin') return -1;
-    if (a.role !== 'admin' && b.role === 'admin') return 1;
+  if (!nama || !role) {
+    if (typeof showToast === 'function') showToast('Nama dan Role wajib diisi!', 'danger');
+    return;
+  }
 
-    // Sekretaris diurutkan berdasarkan kelas lalu nama
-    if (a.role === 'sekretaris' && b.role === 'sekretaris') {
+  if (!Array.isArray(DB.users)) DB.users = [];
 
-        const kelas = (a.kelas || "").localeCompare(
-            b.kelas || "",
-            'id',
-            { numeric: true }
-        );
+  const dataGuru = {
+    name: nama,
+    nama: nama,
+    nip: nip,
+    noWa: noWa,
+    hp: noWa,
+    role: role,
+    username: username,
+    password: password,
+    mapel: role !== 'walas' ? detail : '',
+    kelasBinaan: role === 'walas' ? detail.toUpperCase() : ''
+  };
 
-        if (kelas !== 0) return kelas;
-
-        return (a.name || "").localeCompare(
-            b.name || "",
-            'id'
-        );
+  if (idGuru) {
+    // Update Data
+    const index = DB.users.findIndex(u => String(u.id) === String(idGuru));
+    if (index !== -1) {
+      DB.users[index] = { ...DB.users[index], ...dataGuru };
     }
+  } else {
+    // Tambah Data Baru
+    dataGuru.id = "GURU_" + Date.now();
+    DB.users.push(dataGuru);
+  }
 
-    // Semua guru diurutkan berdasarkan nama
-    if (a.role !== 'admin' && a.role !== 'sekretaris' &&
-        b.role !== 'admin' && b.role !== 'sekretaris') {
+ // Gantilah bagian sinkronisasi di saveGuru() menjadi seperti ini:
 
-        return (a.name || "").localeCompare(
-            b.name || "",
-            'id'
-        );
-    }
+// 1. Simpan ke LocalStorage khusus data users
+if (typeof simpanDataKeStorage === 'function') {
+  simpanDataKeStorage("users");
+}
 
-    return 0;
-});
+// 2. Jika Anda punya fungsi sync Firebase khusus (atau fungsi umum):
+if (typeof syncToFirebase === 'function') {
+  await syncToFirebase('users'); 
+}
+
+if (typeof showToast === 'function') showToast('Data Guru berhasil disimpan!', 'success');
+
+const formContainer = document.getElementById('formGuruContainer');
+if (formContainer) formContainer.classList.add('hidden');
+
+renderAdminGuru();
+}
+
+// ====================================================
+// 4. DOWNLOAD TEMPLATE & IMPORT EXCEL GURU (DIPERBARUI HASILNYA SEJENIS HASIL KODE MANUAL)
+// ====================================================
+function downloadGuruTemplate() {
+  const csv = 'Nama,NIP,Mata Pelajaran,Username,Password,Role,Kelas Binaan,No WhatsApp\nBudi Santoso,198501012010011001,Matematika,guru1,password123,guru,,081234567890\nSiti Rahayu,198703152011012002,,walas1,password123,walas,X BDP A,0812400766\nIwan Setiawan,199005202015011003,,bk1,password123,bk,,081399998888\nHendra Wijaya,198012122005011002,,wakasis1,password123,wakasis,,081277776666';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'template_guru.csv';
+  link.click();
+  URL.revokeObjectURL(link.href);
+  if (typeof showToast === 'function') showToast('Template guru berhasil diunduh', 'success');
+}
+
+function importGuruExcel(e) {
+  const file = e.target.files[0];
+  if (!file) { if (typeof showToast === 'function') showToast('Pilih file terlebih dahulu', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = event => {
+    try {
+      const lines = event.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { if (typeof showToast === 'function') showToast('Format file tidak valid', 'error'); return; }
+      let imported = 0;
+      if (!DB.users) DB.users = [];
       
-      await simpanDataKeStorage("users");
-      addAuditLog(id && id !== 'null' ? 'Edit Guru' : 'Tambah Guru');
-      showToast('Data guru berhasil disimpan', 'success');
-      renderAdminGuru();
-    }
-
-    async function deleteUser(id) {
-      const idx = DB.users.findIndex(u => String(u.id) === String(id));
-      if (idx > -1) { 
-        DB.users.splice(idx, 1); 
-        await simpanDataKeStorage("users");
-
-        addAuditLog('Hapus User');
-        showToast('Data dihapus', 'success');
-        renderAdminGuru(); 
-      }
-    }
-
-    // ====================================================
-    // 4. DOWNLOAD TEMPLATE & IMPORT EXCEL GURU
-    // ====================================================
-    function downloadGuruTemplate() {
-      const csv = 'Nama,NIP,Mata Pelajaran,Username,Password,Role,Kelas Binaan\nBudi Santoso,198501012010011001,Matematika,guru1,password123,guru,\nSiti Rahayu,198703152011012002,,walas1,password123,walas,X TKJ 1\nIwan Setiawan,199005202015011003,,bk1,password123,bk,\nHendra Wijaya,198012122005011002,,wakasis1,password123,wakasis,';
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'template_guru.csv';
-      link.click();
-      URL.revokeObjectURL(link.href);
-      showToast('Template guru berhasil diunduh', 'success');
-    }
-
-    function importGuruExcel(e) {
-      const file = e.target.files[0];
-      if (!file) { showToast('Pilih file terlebih dahulu', 'error'); return; }
-      const reader = new FileReader();
-      reader.onload = event => {
-        try {
-          const lines = event.target.result.split('\n').filter(l => l.trim());
-          if (lines.length < 2) { showToast('Format file tidak valid', 'error'); return; }
-          let imported = 0;
-          if (!DB.users) DB.users = [];
-          
-          for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(',').map(c => c.trim());
-            if (cols.length >= 5 && cols[0] && cols[3] && cols[4]) {
-              const exist = DB.users.find(u => u.username === cols[3]);
-              if (!exist) {
-                const roleTerpilih = cols[5] ? cols[5].toLowerCase() : 'guru';
-                DB.users.push({ 
-                  id: 'USR-' + (Date.now() + i), 
-                  name: cols[0], 
-                  nip: cols[1], 
-                  mapel: roleTerpilih === 'guru' ? cols[2] : '', 
-                  username: cols[3], 
-                  password: cols[4], 
-                  role: roleTerpilih,
-                  kelasBinaan: roleTerpilih === 'walas' ? (cols[6] ? cols[6].toUpperCase() : '') : ''
-                });
-                imported++;
-              }
-            }
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (cols.length >= 5 && cols[0] && cols[3] && cols[4]) {
+          const exist = DB.users.find(u => u.username === cols[3]);
+          if (!exist) {
+            const roleTerpilih = cols[5] ? cols[5].toLowerCase() : 'guru';
+            const noWaImport = cols[7] || '';
+            DB.users.push({ 
+              id: 'USR-' + (Date.now() + i), 
+              name: cols[0],
+              nama: cols[0], 
+              nip: cols[1], 
+              mapel: roleTerpilih === 'guru' ? cols[2] : '', 
+              username: cols[3], 
+              password: cols[4], 
+              role: roleTerpilih,
+              kelasBinaan: roleTerpilih === 'walas' ? (cols[6] ? cols[6].toUpperCase() : '') : '',
+              noWa: noWaImport,
+              hp: noWaImport
+            });
+            imported++;
           }
-        simpanDataKeStorage("users");
+        }
+      }
+      if (typeof simpanDataKeStorage === 'function') simpanDataKeStorage("users");
+      if (typeof simpanKehadiranDanSync === 'function') simpanKehadiranDanSync();
 
-        addAuditLog('Import Guru (' + imported + ' data)');
-        showToast(imported + ' data guru berhasil diimpor', 'success');
-        renderAdminGuru();
-        } catch (err) { showToast('Error: ' + err.message, 'error'); }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
-    }
-
+      if (typeof addAuditLog === 'function') addAuditLog('Import Guru (' + imported + ' data)');
+      if (typeof showToast === 'function') showToast(imported + ' data guru berhasil diimpor', 'success');
+      if (typeof renderAdminGuru === 'function') renderAdminGuru();
+    } catch (err) { if (typeof showToast === 'function') showToast('Error: ' + err.message, 'error'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
     // ====================================================
     // 5. DOWNLOAD TEMPLATE & IMPORT EXCEL SISWA
     // ====================================================
@@ -5695,46 +5587,21 @@ async function simpanKehadiran() {
   for (const s of siswaKelas) {
     const status = document.getElementById('kh-' + s.id).value;
 
-    // KUNCI PERBAIKAN UTAMA:
     // Jika statusnya BUKAN strip ("-"), maka masukkan ke database (termasuk status "hadir")
     if (status !== '-') {
 
-    const id = "ABS_" + Date.now() + "_" + s.id;
+      const id = "ABS_" + Date.now() + "_" + s.id;
 
-    const dataAbsen = {
-        id: id,
-        siswaId: s.id,
-        tanggal: tanggal,
-        kelas: myKelas,
-        status: status.toLowerCase()
-    };
+      const dataAbsen = {
+          id: id,
+          siswaId: s.id,
+          tanggal: tanggal,
+          kelas: myKelas,
+          status: status.toLowerCase()
+      };
 
-    DB.kehadiran.push(dataAbsen);
-    dataKelas.push(dataAbsen);
-
-}
-    // ========================================================
-    // 🔥 MODUL BARU: KIRIM WHATSAPP JIKA STATUS = ALPA (A)
-    // ========================================================
-    if (status.toLowerCase() === 'alpa' || status.toLowerCase() === 'a') {
-      
-      // Mengambil nomor HP orang tua dari data objek siswa.
-      const noHpOrangTua = s.ortuWa || s.hpOrangTua || s.noHpOrangTua || s.telepon || s.hp;
-
-      if (noHpOrangTua) {
-        // Format tanggal Indonesia agar rapi dibaca (Contoh: 25 Juni 2026)
-        const formatTanggalIndo = new Date(tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-        
-        // Template pesan resmi dari SMKN 1 Mepanga
-        const teksPesan = `Yth. Orang Tua/Wali dari *${s.nama}* (Kelas: ${myKelas}).\n\n` +
-                          `Menginfokan bahwa pada tanggal *${formatTanggalIndo}*, ananda bersangkutan tercatat *TIDAK HADIR (ALPA)* tanpa keterangan pada aplikasi Sistem Informasi Kesiswaan SMKN 1 Mepanga.\n\n` +
-                          `Mohon bimbingan bapak/ibu di rumah dan segera konfirmasinya ke pihak sekolah jika terdapat kekeliruan. Terima kasih.`;
-
-        // Jalankan fungsi pengirim WhatsApp Fonnte Anda
-        kirimWhatsAppOrangTua(noHpOrangTua, teksPesan);
-      } else {
-        console.log(`WhatsApp Terlewati: Nomor HP Orang tua untuk siswa ${s.nama} belum diisi.`);
-      }
+      DB.kehadiran.push(dataAbsen);
+      dataKelas.push(dataAbsen);
     }
   }
 
@@ -5742,7 +5609,7 @@ async function simpanKehadiran() {
     tanggal,
     myKelas,
     dataKelas
-);
+  );
 
   // Lanjut ke engine utama bawaan sistem Anda untuk sinkronisasi ke Firebase
   await simpanKehadiranDanSync();
@@ -9360,9 +9227,8 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       });
     }
     
-// 2. HITUNG POIN KETIDAKHADIRAN (DIJAMIN TERBACA 100%)
+    // 2. HITUNG POIN KETIDAKHADIRAN
     if (DB.kehadiran) {
-      // 🔍 Filter cerdas: cari berdasarkan siswaId, idSiswa, atau NISN
       const logSiswa = DB.kehadiran.filter(k => 
         String(k.siswaId || '') === String(s.id) || 
         String(k.idSiswa || '') === String(s.id) ||
@@ -9390,14 +9256,13 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       });
     }
     
-    // 🧮 4. FORMULA SINKRON POIN AKTIF
+    // 4. FORMULA SINKRON POIN AKTIF
     let poinAktifMutlak = (totalPelanggaran + totalAbsen) - totalPenebusanKhusus;
     if (poinAktifMutlak < 0) poinAktifMutlak = 0; 
     
     let statusInfo = typeof dapatkanStatusBimbingan === 'function' ? dapatkanStatusBimbingan(poinAktifMutlak) : null;
     const originalStatusInfo = typeof dapatkanStatusBimbingan === 'function' ? dapatkanStatusBimbingan(totalPelanggaran + totalAbsen) : null;
     
-    // PENYELAMATAN DATA SISWA YANG LUNAS BERKAT REMISI
     if (!statusInfo && originalStatusInfo && totalPenebusanKhusus > 0) {
       statusInfo = {
         teks: poinAktifMutlak === 0 ? "Pemulihan Total (Poin Bersih)" : "Pemulihan Parsial (Poin Berkurang)",
@@ -9406,12 +9271,10 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       };
     }
     
-    // Buang siswa yang memang murni aman (di bawah 15 poin dari awal)
     if (!statusInfo) return null; 
     
     const riwayatSelesai = (DB.riwayatTindakan || []).filter(r => String(r.siswaId) === String(s.id) && r.levelTeks === statusInfo.teks);
 
-    // KEMBALIKAN FORMAT OBJEK YANG BENAR AGAR TABEL HTML TIDAK ERROR
     return {
       idSiswa: s.id,
       nama: s.nama,
@@ -9424,6 +9287,7 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       logPenanganan: riwayatSelesai
     };
   }).filter(Boolean);
+
 
   // FILTER BERDASARKAN HAK AKSES GURU
   if (userRole === 'walas') {
@@ -9439,10 +9303,12 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
     }
   }
 
+  // Sisa kode render HTML ke bawah tetap sama...
+
   // URUTKAN DARI POIN TERTINGGI KE TERENDAH
   listBimbingan.sort((a, b) => b.totalPoin - a.totalPoin);
 
-  mc.innerHTML = `
+mc.innerHTML = `
     <div class="fade-in space-y-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
         <div>
@@ -9450,18 +9316,34 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
           <p class="text-xs text-gray-500">Log masuk: <span class="font-semibold text-blue-600">${namaGuruLogin}</span> (${userRole.toUpperCase()} ${kelasBinaanWalas ? '- ' + kelasBinaanWalas : ''})</p>
         </div>
         
-        ${(userRole === 'wakasis' || userRole === 'admin') ? `
-          <div class="flex items-center gap-2 self-end md:self-center">
-            <label class="text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">🔍 Filter Kelas:</label>
-            <select 
-              onchange="renderBimbinganKesiswaan(this.value)" 
-              class="px-3 py-1.5 text-xs font-medium rounded-xl border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div class="flex flex-wrap items-center gap-2 self-end md:self-center">
+          <!-- 🔥 TOMBOL WA KHUSUS ADMIN / WAKASIS DISISIPKAN DI SINI -->
+          ${(userRole === 'admin' || userRole === 'wakasis') ? `
+            <button 
+              onclick="kirimNotifBimbinganKeWalasManual()" 
+              class="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              title="Kirim pesan ringkasan WA ke Wali Kelas secara berurutan"
             >
-              <option value="SEMUA" ${filterKelasWakasis === 'SEMUA' ? 'selected' : ''}>-- Semua Kelas --</option>
-              ${(DB.kelas || []).map(k => `<option value="${k}" ${filterKelasWakasis === k ? 'selected' : ''}>${k}</option>`).join('')}
-            </select>
-          </div>
-        ` : ''}
+              <span>📲 Kirim WA ke Walas</span>
+            </button>
+            <button onclick="kirimNotifBimbinganKeBKManual()" class="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5">
+  💬 Notif WA Guru BK
+</button>
+          ` : ''}
+
+          ${(userRole === 'wakasis' || userRole === 'admin') ? `
+            <div class="flex items-center gap-2">
+              <label class="text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">🔍 Filter Kelas:</label>
+              <select 
+                onchange="renderBimbinganKesiswaan(this.value)" 
+                class="px-3 py-1.5 text-xs font-medium rounded-xl border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="SEMUA" ${filterKelasWakasis === 'SEMUA' ? 'selected' : ''}>-- Semua Kelas --</option>
+                ${(DB.kelas || []).map(k => `<option value="${k}" ${filterKelasWakasis === k ? 'selected' : ''}>${k}</option>`).join('')}
+              </select>
+            </div>
+          ` : ''}
+        </div>
       </div>
       
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -11403,6 +11285,9 @@ function setStatistikTab(tab) {
   renderHalamanStatistikKehadiran();
 }
 
+// ==========================================
+// 1. FUNGSI TAMPILAN UTAMA (HTML TEMPLATE)
+// ==========================================
 function renderHalamanStatistikKehadiran() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
@@ -11529,7 +11414,7 @@ function renderHalamanStatistikKehadiran() {
 
                 <div class="md:col-span-4 flex justify-end gap-2">
                   <button type="submit" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2">
-                    💾 Simpan Ke Kalender
+                    💾 Simpan Ke Firebase
                   </button>
                 </div>
               </form>
@@ -11575,11 +11460,6 @@ function renderHalamanStatistikKehadiran() {
                   <h2 id="displayBulanTahun" class="text-3xl font-extrabold text-teal-600 tracking-wide">AUGUST 2026</h2>
                 </div>
 
-<button type="button" onclick="cetakJadwalKesiswaan()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5 print:hidden">
-      🖨️ Cetak / Simpan PDF
-    </button>
-  </div>
-
                 <div class="space-y-2 w-full md:w-auto text-right">
                   <div class="flex items-center justify-end gap-2">
                     <span class="bg-teal-500 text-white px-3 py-1 rounded text-xs font-bold min-w-[100px] text-center">TGL AWAL</span>
@@ -11592,25 +11472,25 @@ function renderHalamanStatistikKehadiran() {
                 </div>
               </div>
 
-<!-- GRID HARI DAN TANGGAL -->
-<div class="overflow-x-auto">
-  <div class="min-w-[700px]">
-    <!-- HEADER HARI (SENIN - MINGGU) -->
-    <div class="grid grid-cols-7 gap-1 bg-teal-500 p-1 text-center text-white text-xs font-bold rounded-t-lg">
-      <div class="py-2">Senin</div>
-      <div class="py-2">Selasa</div>
-      <div class="py-2">Rabu</div>
-      <div class="py-2">Kamis</div>
-      <div class="py-2">Jumat</div>
-      <div class="py-2">Sabtu</div>
-      <div class="py-2">Minggu</div>
-    </div>
+              <!-- GRID HARI DAN TANGGAL -->
+              <div class="overflow-x-auto">
+                <div class="min-w-[700px]">
+                  <div class="grid grid-cols-7 gap-1 bg-teal-500 p-1 text-center text-white text-xs font-bold rounded-t-lg">
+                    <div class="py-2">Senin</div>
+                    <div class="py-2">Selasa</div>
+                    <div class="py-2">Rabu</div>
+                    <div class="py-2">Kamis</div>
+                    <div class="py-2">Jumat</div>
+                    <div class="py-2">Sabtu</div>
+                    <div class="py-2">Minggu</div>
+                  </div>
 
-    <div id="gridKalenderKesiswaan" class="grid grid-cols-7 gap-1.5 bg-gray-200 dark:bg-gray-700 p-1.5 rounded-b-lg">
-      <!-- Dirender lewat JavaScript -->
-    </div>
-  </div>
-</div>
+                  <div id="gridKalenderKesiswaan" class="grid grid-cols-7 gap-1.5 bg-gray-200 dark:bg-gray-700 p-1.5 rounded-b-lg">
+                    <!-- Dirender lewat Firebase -->
+                  </div>
+                </div>
+              </div>
+
               <!-- CATATAN / NOTES -->
               <div class="mt-4">
                 <div class="bg-teal-500 text-white px-4 py-1.5 text-xs font-bold uppercase rounded-t-lg">
@@ -11629,13 +11509,183 @@ function renderHalamanStatistikKehadiran() {
 
   if (window.lucide) lucide.createIcons();
 
-  // INISIALISASI FUNGSI REALTIME SETELAH DOM SELESAI DITAMPILKAN
   setTimeout(() => {
     if (statistikTab === 'kelas' && typeof idrRenderChartKelas === 'function') idrRenderChartKelas();
     if (statistikTab === 'pelanggaran' && typeof idrRenderChartPelanggaran === 'function') idrRenderChartPelanggaran();
     if (statistikTab === 'rapor' && typeof generateRaporBulanan === 'function') generateRaporBulanan();
     if (statistikTab === 'jadwal' && typeof renderJadwalKesiswaan === 'function') renderJadwalKesiswaan();
   }, 100);
+}
+
+
+// ==========================================
+// 2. FUNGSI LOGIKA OLAHDATA FIREBASE
+// ==========================================
+
+// A. TAMBAH JADWAL KE FIREBASE
+async function tambahJadwalKesiswaan(event) {
+  event.preventDefault();
+
+  const tgl = document.getElementById('inputTglJadwal')?.value;
+  const nama = document.getElementById('inputNamaJadwal')?.value.trim();
+  const status = document.getElementById('inputStatusJadwal')?.value;
+
+  if (!tgl || !nama) return;
+
+  const newJadwal = {
+    tanggal: tgl,
+    namaKegiatan: nama,
+    status: status,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      await firebase.database().ref('jadwalKesiswaan').push(newJadwal);
+    } else if (typeof db !== 'undefined') {
+      await db.collection('jadwalKesiswaan').add(newJadwal);
+    }
+
+    document.getElementById('formJadwalKesiswaan')?.reset();
+    if (typeof showToast === 'function') showToast('Agenda berhasil disimpan ke Firebase!', 'success');
+
+    renderJadwalKesiswaan();
+  } catch (error) {
+    console.error('Gagal menyimpan jadwal ke Firebase:', error);
+    if (typeof showToast === 'function') showToast('Gagal menyimpan ke Firebase', 'error');
+  }
+}
+
+// B. AMBIL DATA DARI FIREBASE & RENDER KALENDER
+async function renderJadwalKesiswaan() {
+  const filterTahun = document.getElementById('filterTahunJadwal')?.value || new Date().getFullYear();
+  const filterBulan = document.getElementById('filterBulanJadwal')?.value || (new Date().getMonth() + 1);
+
+  const namaBulanList = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+  const displayHeader = document.getElementById('displayBulanTahun');
+  if (displayHeader) displayHeader.innerText = `${namaBulanList[filterBulan - 1]} ${filterTahun}`;
+
+  const tglAkhirBulan = new Date(filterTahun, filterBulan, 0).getDate();
+  if (document.getElementById('displayTglAwal')) document.getElementById('displayTglAwal').innerText = `1/${filterBulan}/${filterTahun}`;
+  if (document.getElementById('displayTglAkhir')) document.getElementById('displayTglAkhir').innerText = `${tglAkhirBulan}/${filterBulan}/${filterTahun}`;
+
+  // Ambil Data Jadwal dari Firebase
+  let listJadwal = [];
+  try {
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      const snapshot = await firebase.database().ref('jadwalKesiswaan').once('value');
+      const data = snapshot.val();
+      if (data) {
+        listJadwal = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+      }
+    } else if (typeof db !== 'undefined') {
+      const snapshot = await db.collection('jadwalKesiswaan').get();
+      listJadwal = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+  } catch (err) {
+    console.error('Gagal mengambil data jadwal dari Firebase:', err);
+  }
+
+  // Load Catatan dari Firebase
+  loadCatatanKesiswaan(filterTahun, filterBulan);
+
+  // Render Grid Kalender
+  const container = document.getElementById('gridKalenderKesiswaan');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const firstDayIndex = new Date(filterTahun, filterBulan - 1, 1).getDay(); 
+  const startingDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1; 
+
+  for (let x = 0; x < startingDay; x++) {
+    container.innerHTML += `<div class="bg-gray-100 dark:bg-gray-800/40 rounded-lg min-h-[90px] p-1 border border-dashed border-gray-200 dark:border-gray-700"></div>`;
+  }
+
+  for (let d = 1; d <= tglAkhirBulan; d++) {
+    const formatTgl = `${filterTahun}-${String(filterBulan).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const agendaHariIni = listJadwal.filter(j => j.tanggal === formatTgl);
+
+    let htmlAgenda = agendaHariIni.map(a => {
+      let colorClass = 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300';
+      if (a.status === 'Wajib') colorClass = 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
+      if (a.status === 'Rutin') colorClass = 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
+
+      return `
+        <div class="text-[10px] p-1 rounded font-semibold ${colorClass} flex justify-between items-center group mb-1">
+          <span class="truncate">${a.namaKegiatan}</span>
+          <button onclick="hapusJadwalKesiswaan('${a.id}')" class="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity ml-1 font-bold">×</button>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML += `
+      <div class="bg-white dark:bg-gray-800 rounded-lg min-h-[90px] p-1.5 border border-gray-100 dark:border-gray-700 flex flex-col justify-between">
+        <div class="font-bold text-xs text-gray-700 dark:text-gray-300 mb-1">${d}</div>
+        <div class="flex-1 overflow-y-auto max-h-[70px] space-y-1">${htmlAgenda}</div>
+      </div>
+    `;
+  }
+}
+
+// C. HAPUS JADWAL DARI FIREBASE
+async function hapusJadwalKesiswaan(id) {
+  if (!confirm('Apakah Anda yakin ingin menghapus agenda ini?')) return;
+
+  try {
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      await firebase.database().ref(`jadwalKesiswaan/${id}`).remove();
+    } else if (typeof db !== 'undefined') {
+      await db.collection('jadwalKesiswaan').doc(id).delete();
+    }
+
+    if (typeof showToast === 'function') showToast('Agenda dihapus!', 'info');
+    renderJadwalKesiswaan();
+  } catch (err) {
+    console.error('Gagal menghapus agenda:', err);
+  }
+}
+
+// D. SIMPAN CATATAN KE FIREBASE
+async function simpanCatatanKesiswaan() {
+  const filterTahun = document.getElementById('filterTahunJadwal')?.value;
+  const filterBulan = document.getElementById('filterBulanJadwal')?.value;
+  const teks = document.getElementById('catatanKesiswaan')?.value || '';
+
+  if (!filterTahun || !filterBulan) return;
+  const docKey = `${filterTahun}_${filterBulan}`;
+
+  try {
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      await firebase.database().ref(`catatanKesiswaan/${docKey}`).set({ catatan: teks });
+    } else if (typeof db !== 'undefined') {
+      await db.collection('catatanKesiswaan').doc(docKey).set({ catatan: teks });
+    }
+    if (typeof showToast === 'function') showToast('Catatan disimpan ke Cloud!', 'success');
+  } catch (err) {
+    console.error('Gagal menyimpan catatan:', err);
+  }
+}
+
+// E. LOAD CATATAN DARI FIREBASE
+async function loadCatatanKesiswaan(tahun, bulan) {
+  const docKey = `${tahun}_${bulan}`;
+  const textarea = document.getElementById('catatanKesiswaan');
+  if (!textarea) return;
+
+  try {
+    let catatanTeks = '';
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      const snap = await firebase.database().ref(`catatanKesiswaan/${docKey}`).once('value');
+      if (snap.exists()) catatanTeks = snap.val().catatan || '';
+    } else if (typeof db !== 'undefined') {
+      const doc = await db.collection('catatanKesiswaan').doc(docKey).get();
+      if (doc.exists) catatanTeks = doc.data().catatan || '';
+    }
+    textarea.value = catatanTeks;
+  } catch (err) {
+    console.error('Gagal memuat catatan:', err);
+  }
 }
 
 // ========================================================
@@ -12997,11 +13047,10 @@ function eksekusiResetPeriode(tipe) {
 
 // 🔥 FUNGSI UTAMA INTEGRASI WHATSAPP GATEWAY (FONNTE)
 function kirimWhatsAppOrangTua(nomorWa, pesan) {
-  // Ganti dengan Token Fonnte Anda yang didapat dari dashboard fonnte.com
-  const TOKEN_FONNTE ="yMnQDwYrMRsNBgW6as1x"; 
+  const TOKEN_FONNTE = "yMnQDwYrMRsNBgW6as1x"; 
 
   if (!nomorWa) {
-    console.log("Gagal kirim WA: Nomor HP Orang Tua tidak ditemukan.");
+    console.log("Gagal kirim WA: Nomor HP tidak ditemukan.");
     return;
   }
 
@@ -13011,7 +13060,7 @@ function kirimWhatsAppOrangTua(nomorWa, pesan) {
     nomorBersih = '62' + nomorBersih.slice(1);
   }
 
-  // Lakukan request ke server Fonnte
+  // Lakukan request ke server Fonnte tanpa memicu toast per nomor
   fetch('https://api.fonnte.com/send', {
     method: 'POST',
     headers: {
@@ -13028,13 +13077,210 @@ function kirimWhatsAppOrangTua(nomorWa, pesan) {
   .then(data => {
     if (data.status) {
       console.log(`WhatsApp berhasil dikirim ke ${nomorBersih}`);
-      if (typeof showToast === 'function') showToast('Notifikasi WhatsApp terkirim ke Orang Tua!', 'success');
     } else {
       console.error('Fonnte Error:', data.reason);
     }
   })
   .catch(error => {
     console.error('Gagal mengirim WhatsApp:', error);
+  });
+}
+
+// ========================================================
+// 🔔 FUNGSI KIRIM NOTIFIKASI WA MANUAL UNTUK WALI KELAS
+// ========================================================
+async function kirimNotifBimbinganKeWalasManual() {
+  const hariIni = new Date().toISOString().split('T')[0];
+
+  // 1. Dapatkan daftar siswa yang butuh penanganan (Poin >= 15 & Belum Ditangani)
+  const listBimbingan = dapatkanDataBimbinganSemua();
+  const siswaButuhPenanganan = listBimbingan.filter(d => !d.sudahDitangani && d.totalPoin >= 15);
+
+  if (siswaButuhPenanganan.length === 0) {
+    if (typeof showToast === 'function') showToast('Tidak ada siswa yang memerlukan bimbingan saat ini.', 'info');
+    return;
+  }
+
+  // 2. Kelompokkan siswa berdasarkan Kelas
+  const siswaPerKelas = {};
+  siswaButuhPenanganan.forEach(d => {
+    if (!siswaPerKelas[d.kelas]) siswaPerKelas[d.kelas] = [];
+    siswaPerKelas[d.kelas].push(d);
+  });
+
+  const daftarKelas = Object.keys(siswaPerKelas);
+  let totalWalasTerkirim = 0;
+
+  if (typeof showToast === 'function') {
+    showToast(`Memulai pengiriman pesan ke ${daftarKelas.length} Wali Kelas...`, 'info');
+  }
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // 3. Looping Pengiriman per Kelas
+  for (let i = 0; i < daftarKelas.length; i++) {
+    const namaKelas = daftarKelas[i];
+    const daftarSiswa = siswaPerKelas[namaKelas];
+
+    const walas = (DB.users || []).find(u => 
+      u.role === 'walas' && 
+      String(u.kelasBinaan || '').toLowerCase().trim() === String(namaKelas).toLowerCase().trim()
+    );
+
+    if (walas && walas.noWa) {
+      const daftarTeksSiswa = daftarSiswa.map(s => {
+        let emojiStatus = '🟡';
+        if (s.totalPoin >= 50) emojiStatus = '🔴';
+        else if (s.totalPoin >= 25) emojiStatus = '🟠';
+
+        return `${emojiStatus} ${s.nama} - ${s.totalPoin} Poin`;
+      }).join('\n');
+
+      const teksPesan = 
+        `🔔 Bimbingan Kesiswaan Hari Ini\n\n` +
+        `Yth. Wali Kelas *${namaKelas}*,\n` +
+        `terdapat *${daftarSiswa.length} siswa* yang memerlukan tindak lanjut hari ini.\n\n` +
+        `${daftarTeksSiswa}\n\n` +
+        `Silahkan buka sistem untuk melihat detail dan melakukan konfirmasi bimbingan\n\n` +
+        `https://kesiswaan-smkn1mpg.vercel.app`;
+
+      kirimWhatsAppOrangTua(walas.noWa, teksPesan);
+      totalWalasTerkirim++;
+
+      daftarSiswa.forEach(s => {
+        const siswaObj = (DB.siswa || []).find(so => String(so.id) === String(s.idSiswa));
+        if (siswaObj) siswaObj.lastNotifWalasDate = hariIni;
+      });
+
+      if (i < daftarKelas.length - 1) {
+        await delay(5000); 
+      }
+    }
+  }
+
+  // Simpan data di latar belakang tanpa memicu toast sync/kehadiran berlebih
+  if (typeof simpanKehadiranDanSync === 'function') {
+    simpanKehadiranDanSync();
+  }
+
+  // Single Toast Notifikasi Ringkas di Akhir
+  if (typeof showToast === 'function') {
+    showToast(`Berhasil! Notifikasi WA terkirim ke ${totalWalasTerkirim} Wali Kelas.`, 'success');
+  }
+}
+
+// ========================================================
+// 🔔 FUNGSI KIRIM NOTIFIKASI WA MANUAL UNTUK GURU BK (KHUSUS MERAH / POIN >= 50)
+// ========================================================
+async function kirimNotifBimbinganKeBKManual() {
+  const hariIni = new Date().toISOString().split('T')[0];
+
+  // 1. Dapatkan siswa yang HANYA berkategori MERAH (Poin >= 50 & Belum Ditangani)
+  const listBimbingan = dapatkanDataBimbinganSemua();
+  const siswaMerahBK = listBimbingan.filter(d => !d.sudahDitangani && d.totalPoin >= 50);
+
+  if (siswaMerahBK.length === 0) {
+    if (typeof showToast === 'function') showToast('Tidak ada siswa kategori merah (poin >= 50) yang memerlukan bimbingan BK saat ini.', 'info');
+    return;
+  }
+
+  // 2. Cari semua user yang memiliki Role 'bk' atau 'gurubk'
+  const daftarGuruBK = (DB.users || []).filter(u => 
+    (String(u.role).toLowerCase() === 'bk' || String(u.role).toLowerCase() === 'gurubk') && u.noWa
+  );
+
+  if (daftarGuruBK.length === 0) {
+    if (typeof showToast === 'function') showToast('Gagal: Nomor WhatsApp Guru BK tidak ditemukan di data User.', 'error');
+    return;
+  }
+
+  // 3. Susun daftar teks siswa (Khusus Merah 🔴)
+  const daftarTeksSiswa = siswaMerahBK.map(s => {
+    return `🔴 *${s.nama}* (${s.kelas}) - ${s.totalPoin} Poin`;
+  }).join('\n');
+
+  const teksPesan = 
+    `🚨 *DARURAT / KATEGORI MERAH - BIMBINGAN BK*\n\n` +
+    `Yth. Bapak/Ibu Guru BK,\n` +
+    `Berikut daftar *${siswaMerahBK.length} siswa* dengan status *Kategori Merah (Poin ≥ 50)* yang memerlukan penanganan khusus/panggilan BK:\n\n` +
+    `${daftarTeksSiswa}\n\n` +
+    `Mohon untuk dapat segera dikoordinasikan penanganannya melalui sistem Kesiswaan:\n` +
+    `https://kesiswaan-smkn1mpg.vercel.app`;
+
+  if (typeof showToast === 'function') {
+    showToast(`Memulai pengiriman pesan ke ${daftarGuruBK.length} Guru BK...`, 'info');
+  }
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  let totalBKTerkirim = 0;
+
+  // 4. Kirim ke seluruh Guru BK yang terdaftar
+  for (let i = 0; i < daftarGuruBK.length; i++) {
+    const bk = daftarGuruBK[i];
+    
+    kirimWhatsAppOrangTua(bk.noWa, teksPesan);
+    totalBKTerkirim++;
+
+    if (i < daftarGuruBK.length - 1) {
+      await delay(3000); 
+    }
+  }
+
+  // Toast Notifikasi Selesai
+  if (typeof showToast === 'function') {
+    showToast(`Berhasil! Notifikasi WA siswa merah terkirim ke ${totalBKTerkirim} Guru BK.`, 'success');
+  }
+}
+
+// Helper untuk mengambil seluruh data bimbingan saat ini
+function dapatkanDataBimbinganSemua() {
+  return (DB.siswa || []).map(s => {
+    let totalPelanggaran = 0, totalAbsen = 0, totalPenebusanKhusus = 0;
+
+    if (DB.pelanggaran) {
+      DB.pelanggaran.forEach(p => {
+        if (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)) {
+          const tt = DB.tatatertib && DB.tatatertib.length > 0 ? DB.tatatertib.find(x => x.id == p.jenisId || x.kode == p.jenisId) : null;
+          totalPelanggaran += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
+        }
+      });
+    }
+
+    if (DB.kehadiran) {
+      const logSiswa = DB.kehadiran.filter(k => 
+        String(k.siswaId || '') === String(s.id) || 
+        String(k.idSiswa || '') === String(s.id) ||
+        (s.nisn && String(k.nisn || '') === String(s.nisn))
+      );
+      let alpa = 0, izin = 0, sakit = 0;
+      logSiswa.forEach(k => {
+        const st = String(k.status || "").toUpperCase().trim();
+        if (st === 'A' || st === 'ALFA' || st === 'ALPA') alpa++;
+        else if (st === 'I' || st === 'IZIN') izin++;
+        else if (st === 'S' || st === 'SAKIT') sakit++;
+      });
+      totalAbsen = (alpa * 3) + (izin * 1) + (sakit * 0.5);
+    }
+
+    if (DB.penebusan_poin) {
+      DB.penebusan_poin.forEach(p => {
+        if (String(p.siswaId) === String(s.id)) totalPenebusanKhusus += (Number(p.poinPemulihan) || 0);
+      });
+    }
+
+    let poinAktifMutlak = (totalPelanggaran + totalAbsen) - totalPenebusanKhusus;
+    if (poinAktifMutlak < 0) poinAktifMutlak = 0;
+
+    const statusInfo = typeof dapatkanStatusBimbingan === 'function' ? dapatkanStatusBimbingan(poinAktifMutlak) : null;
+    const riwayatSelesai = (DB.riwayatTindakan || []).filter(r => String(r.siswaId) === String(s.id) && r.levelTeks === (statusInfo ? statusInfo.teks : ''));
+
+    return {
+      idSiswa: s.id,
+      nama: s.nama,
+      kelas: s.kelas,
+      totalPoin: poinAktifMutlak,
+      sudahDitangani: riwayatSelesai.length > 0 || poinAktifMutlak < 15
+    };
   });
 }
 
