@@ -957,117 +957,117 @@ function handleLogin() {
     }
 
 function buildSidebar() {
-      const nav = document.getElementById('sidebarNav');
-      if (!nav) return;
+  const nav = document.getElementById('sidebarNav');
+  if (!nav) return;
 
-      let items = [];
-      const role = (currentUser.role || '').toLowerCase();
+  let items = [];
+  const role = (currentUser.role || '').toLowerCase();
 
-if (role === 'admin') {
-  items = [
-    { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+  if (role === 'admin') {
+    items = [
+      { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
 
-    // ==========================================
-    // KELOMPOK: DATABASE MASTER
-    // ==========================================
-    { type: 'heading', label: 'DATABASE' },
-    { id: 'admin-kelas', icon: 'book-open', label: 'Kelola Kelas' },
-    { id: 'admin-guru', icon: 'users', label: 'Kelola Guru' },
-    { id: 'admin-siswa', icon: 'user-check', label: 'Kelola Siswa' },
-    { id: 'admin-sekretaris', icon: 'user-plus', label: 'Kelola Sekretaris' },
+      // ==========================================
+      // KELOMPOK: DATABASE MASTER
+      // ==========================================
+      { type: 'heading', label: 'DATABASE' },
+      { id: 'admin-kelas', icon: 'book-open', label: 'Kelola Kelas' },
+      { id: 'admin-guru', icon: 'users', label: 'Kelola Guru' },
+      { id: 'admin-siswa', icon: 'user-check', label: 'Kelola Siswa' },
+      { id: 'admin-sekretaris', icon: 'user-plus', label: 'Kelola Sekretaris' },
 
-    // ==========================================
-    // KELOMPOK: KESISWAAN & OPERASIONAL
-    // ==========================================
-    { type: 'heading', label: 'AKADEMIK & PRESENSI' },
-    { id: 'statistik-kehadiran', icon: 'bar-chart-3', label: 'Statistik Kesiswaan' },
-    { id: 'rekap-ketidakhadiran', icon: 'calendar-x', label: 'Rekap Ketidakhadiran' },
-    { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' }, 
+      // ==========================================
+      // KELOMPOK: KESISWAAN & OPERASIONAL
+      // ==========================================
+      { type: 'heading', label: 'AKADEMIK & PRESENSI' },
+      { id: 'statistik-kehadiran', icon: 'bar-chart-3', label: 'Statistik Kesiswaan' },
+      { id: 'rekap-ketidakhadiran', icon: 'calendar-x', label: 'Rekap Ketidakhadiran' },
+      { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' }, 
 
-    // ==========================================
-    // KELOMPOK: TATA TERTIB & POIN PELANGGARAN
-    // ==========================================
-    { type: 'heading', label: 'KEDISIPLINAN & POIN' },
-    { id: 'catatan-pelanggaran', icon: 'file-text', label: 'Catatan Pelanggaran' },
-    { id: 'rekap-pelanggaran', icon: 'alert-triangle', label: 'Rekap Pelanggaran' },
-    { id: 'admin-tatatertib', icon: 'gavel', label: 'Kelola Tata Tertib' },
-    { id: 'admin-kredit-poin', icon: 'award', label: 'Kelola Kredit Poin' },
-    { id: 'rekap-kredit-poin', icon: 'award', label: 'Rekap Kredit Poin' },
+      // ==========================================
+      // KELOMPOK: TATA TERTIB & POIN PELANGGARAN
+      // ==========================================
+      { type: 'heading', label: 'KEDISIPLINAN & POIN' },
+      { id: 'catatan-pelanggaran', icon: 'file-text', label: 'Catatan Pelanggaran' },
+      { id: 'rekap-pelanggaran', icon: 'alert-triangle', label: 'Rekap Pelanggaran' },
+      { id: 'admin-tatatertib', icon: 'gavel', label: 'Kelola Tata Tertib' },
+      { id: 'admin-kredit-poin', icon: 'award', label: 'Kelola Kredit Poin' },
+      { id: 'rekap-kredit-poin', icon: 'award', label: 'Rekap Kredit Poin' },
 
-    // ==========================================
-    // KELOMPOK: LAYANAN IDENTITAS PELAJAR
-    // ==========================================
-    { type: 'heading', label: 'KARTU PELAJAR' },
-    { id: 'input-data-pelajar', icon: 'contact', label: 'Lengkapi Data Pelajar' },
-    { id: 'cetak-kartu-pelajar', icon: 'credit-card', label: 'Cetak Kartu Pelajar' },
+      // ==========================================
+      // KELOMPOK: LAYANAN IDENTITAS PELAJAR
+      // ==========================================
+      { type: 'heading', label: 'DATA PELAJAR' },
+      { id: 'input-data-pelajar', icon: 'contact', label: 'Lengkapi Data Pelajar' },
+      { id: 'data-induk-siswa', icon: 'folder-open', label: 'Data Induk Siswa' }, // 🟢 MENU BARU
+      { id: 'cetak-kartu-pelajar', icon: 'credit-card', label: 'Cetak Kartu Pelajar' },
 
-    // ==========================================
-    // KELOMPOK: KONFIGURASI SISTEM UTAMA
-    // ==========================================
-    { type: 'heading', label: 'SISTEM' },
-    { id: 'admin-identitas', icon: 'building', label: 'Identitas Sekolah' },
-    { id: 'admin-backup', icon: 'database', label: 'Cadangan Data (Backup)' },
-    { id: 'audit-log', icon: 'shield', label: 'Audit Log' }
-  ];
-} else if (role === 'walas') {
-        // MENU KHUSUS WALI KELAS (Daftar Siswa Kelas otomatis membaca kelas binaannya secara dinamis)
-        const labelKelasDinamis = currentUser.kelasBinaan ? `Daftar Siswa Kelas (${currentUser.kelasBinaan})` : 'Daftar Siswa Kelas';
-        items = [
-          { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-          { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
-          { id: 'input-kredit-poin', icon: 'award', label: 'Input Kredit Poin' },
-          { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' },
-          { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
-        ];
-      } else if (role === 'bk' || role === 'wakasis') {
-        // Menu untuk BK dan Wakasis (Sama seperti walas tapi TANPA menu siswa kelas binaan)
-        items = [
-          { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-          { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
-          { id: 'input-kredit-poin', icon: 'award', label: 'Input Kredit Poin' },
-          { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' },
-          { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
-        ];
-      } else if (role === 'guru') {
-        items = [
-          { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-          { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
-          { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
-        ];
-      } else {
-        // Role untuk sekretaris kelas
-        items = [
-          { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
-          { id: 'kehadiran', icon: 'check-circle', label: 'Kehadiran' },
-          { id: 'rekap-ketidakhadiran-sekre', icon: 'calendar-x', label: 'Rekap Ketidakhadiran' },
-          { id: 'input-data-pelajar', icon: 'contact', label: 'Lengkapi Data Pelajar' },
-        ];
-      }
+      // ==========================================
+      // KELOMPOK: KONFIGURASI SISTEM UTAMA
+      // ==========================================
+      { type: 'heading', label: 'SISTEM' },
+      { id: 'admin-identitas', icon: 'building', label: 'Identitas Sekolah' },
+      { id: 'admin-backup', icon: 'database', label: 'Cadangan Data (Backup)' },
+      { id: 'audit-log', icon: 'shield', label: 'Audit Log' }
+    ];
+  } else if (role === 'walas') {
+    // MENU KHUSUS WALI KELAS
+    const labelKelasDinamis = currentUser.kelasBinaan ? `Daftar Siswa Kelas (${currentUser.kelasBinaan})` : 'Daftar Siswa Kelas';
+    items = [
+      { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
+      { id: 'input-kredit-poin', icon: 'award', label: 'Input Kredit Poin' },
+      { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' },
+      { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
+    ];
+  } else if (role === 'bk' || role === 'wakasis') {
+    // Menu untuk BK dan Wakasis
+    items = [
+      { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
+      { id: 'input-kredit-poin', icon: 'award', label: 'Input Kredit Poin' },
+      { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' },
+      { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
+    ];
+  } else if (role === 'guru') {
+    items = [
+      { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { id: 'input-pelanggaran', icon: 'plus-circle', label: 'Input Pelanggaran' },
+      { id: 'rekap-pelanggaran-guru', icon: 'list', label: 'Rekapitulasi' }
+    ];
+  } else {
+    // Role untuk sekretaris kelas
+    items = [
+      { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { id: 'kehadiran', icon: 'check-circle', label: 'Kehadiran' },
+      { id: 'rekap-ketidakhadiran-sekre', icon: 'calendar-x', label: 'Rekap Ketidakhadiran' },
+      { id: 'input-data-pelajar', icon: 'contact', label: 'Lengkapi Data Pelajar' },
+      { id: 'data-induk-siswa', icon: 'folder-open', label: 'Data Induk Siswa' } // 🟢 MENU BARU (Opsional jika Sekretaris butuh)
+    ];
+  }
 
-// Generate HTML secara otomatis sesuai standar aplikasi Anda + Dukungan Heading Pembatas
-      nav.innerHTML = items.map(i => {
-        // 1. JIKA ADALAH HEADING PEMBATAS (BREAK KETERANGAN)
-        if (i.type === 'heading') {
-          return `
-            <div class="pt-4 pb-1 mt-2 border-b border-dashed border-gray-200 dark:border-gray-700/50 mb-1">
-              <p class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-4">
-                == ${i.label} ==
-              </p>
-            </div>
-          `;
-        }
-
-        // 2. JIKA ADALAH TOMBOL MENU NAVIGASI BIASA
-        return `
-          <button onclick="navigateTo('${i.id}')" id="nav-${i.id}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="${i.label}">
-            <i data-lucide="${i.icon}" class="w-4 h-4 flex-shrink-0"></i>
-            <span class="sidebar-label">${i.label}</span>
-          </button>
-        `;
-      }).join('');
-
-      lucide.createIcons();
+  // Generate HTML secara otomatis
+  nav.innerHTML = items.map(i => {
+    if (i.type === 'heading') {
+      return `
+        <div class="pt-4 pb-1 mt-2 border-b border-dashed border-gray-200 dark:border-gray-700/50 mb-1">
+          <p class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-4">
+            == ${i.label} ==
+          </p>
+        </div>
+      `;
     }
+
+    return `
+      <button onclick="navigateTo('${i.id}')" id="nav-${i.id}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="${i.label}">
+        <i data-lucide="${i.icon}" class="w-4 h-4 flex-shrink-0"></i>
+        <span class="sidebar-label">${i.label}</span>
+      </button>
+    `;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
 
 function navigateTo(page) {
   currentPage = page;
@@ -1076,15 +1076,13 @@ function navigateTo(page) {
   if (navEl) navEl.classList.add('active');
   renderPage(page);
   
-  // 🟢 PERBAIKAN: Tutup mobile sidebar dengan cara yang benar
   const sb = document.getElementById('sidebar');
   if (window.innerWidth < 1024 && sb && !sb.classList.contains('-translate-x-full')) {
-    toggleSidebar(); // Memanggil fungsi toggle yang sudah kita perbaiki kemarin
+    toggleSidebar();
   }
 }
 
 function toggleMinimizeSidebar() {
-  // BENTENG PENGAMAN: Jika dibuka di HP (layar < 1024px), abaikan fungsi minimize ini
   if (window.innerWidth < 1024) return;
 
   const sb = document.getElementById('sidebar');
@@ -1093,7 +1091,6 @@ function toggleMinimizeSidebar() {
   const isMinimized = sb.classList.contains('sidebar-minimized');
 
   if (isMinimized) {
-    // Restore
     sb.classList.remove('sidebar-minimized', 'w-16');
     sb.classList.add('w-64');
     if (header) header.classList.remove('hidden');
@@ -1102,7 +1099,6 @@ function toggleMinimizeSidebar() {
     document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('justify-center', 'px-2'));
     localStorage.setItem('sidebar-minimized', 'false');
   } else {
-    // Minimize
     sb.classList.add('sidebar-minimized', 'w-16');
     sb.classList.remove('w-64');
     if (header) header.classList.add('hidden');
@@ -1121,7 +1117,6 @@ function toggleSidebar() {
 
   const isHidden = sb.classList.contains('-translate-x-full');
 
-  // Jika dibuka di HP, pastikan mode perkecil/minimize dibatalkan agar layout tidak rusak
   if (window.innerWidth < 1024) {
     sb.classList.remove('sidebar-minimized', 'w-16');
     sb.classList.add('w-64');
@@ -1132,30 +1127,25 @@ function toggleSidebar() {
   }
 
   if (isHidden) {
-    // OPEN SIDEBAR (Mobile Mode)
     sb.classList.remove('-translate-x-full');
     if (overlay) overlay.classList.remove('hidden');
   } else {
-    // CLOSE SIDEBAR (Mobile Mode)
     sb.classList.add('-translate-x-full');
     if (overlay) overlay.classList.add('hidden');
   }
 }
 
-// Pengaman tambahan saat ukuran browser berubah (Resize Desktop <-> Mobile)
 window.addEventListener('resize', () => {
   const sb = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
   if (!sb) return;
 
   if (window.innerWidth < 1024) {
-    // Di HP: Sembunyikan sidebar ke kiri dan matikan efek w-16
     sb.classList.add('-translate-x-full');
     sb.classList.remove('sidebar-minimized', 'w-16');
     sb.classList.add('w-64');
     if (overlay) overlay.classList.add('hidden');
   } else {
-    // Di Desktop: Munculkan sidebar kembali normal sesuai localstorage
     sb.classList.remove('-translate-x-full');
     const wasMinimized = localStorage.getItem('sidebar-minimized') === 'true';
     if (wasMinimized) {
@@ -1165,159 +1155,162 @@ window.addEventListener('resize', () => {
   }
 });
 
-    function toggleDark() {
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('sik_dark', document.documentElement.classList.contains('dark'));
-    }
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('sik_dark', document.documentElement.classList.contains('dark'));
+}
 
 // ===== RENDER PAGES =====
-    function renderPage(page) {
-      // 1. KRUSIAL: Update variabel state global currentPage
-      currentPage = page || 'dashboard';
+function renderPage(page) {
+  currentPage = page || 'dashboard';
 
-      const mc = document.getElementById('mainContent');
-      if (!mc) return;
+  const mc = document.getElementById('mainContent');
+  if (!mc) return;
 
-      if (typeof destroyCharts === 'function') destroyCharts();
+  if (typeof destroyCharts === 'function') destroyCharts();
 
-      // Amankan interval/timer dashboard agar tidak menginterupsi menu lain
-      if (window.dashboardInterval) {
-        clearInterval(window.dashboardInterval);
-        window.dashboardInterval = null;
+  if (window.dashboardInterval) {
+    clearInterval(window.dashboardInterval);
+    window.dashboardInterval = null;
+  }
+
+  // Daftar Judul Halaman Lengkap
+  const titles = {
+    'dashboard': 'Dashboard',
+    'admin-kelas': 'Kelola Kelas',
+    'rekap-pelanggaran': 'Rekap Pelanggaran',
+    'rekap-ketidakhadiran': 'Rekap Ketidakhadiran',
+    'catatan-pelanggaran': 'Catatan Pelanggaran',
+    'admin-guru': 'Kelola Guru',
+    'admin-siswa': 'Kelola Siswa',
+    'admin-backup': 'Backup Data',
+    'admin-sekretaris': 'Kelola Sekretaris',
+    'admin-identitas': 'Identitas Sekolah',
+    'admin-tatatertib': 'Kelola Tata Tertib',
+    'admin-kredit-poin': 'Kelola Kredit Poin',
+    'audit-log': 'Audit Log',
+    'input-data-pelajar': 'Input Data Pelajar',
+    'data-induk-siswa': 'Data Induk Siswa', // 🟢 DITAMBAHKAN
+    'cetak-kartu-pelajar': 'Cetak Kartu Pelajar',
+    'input-pelanggaran': 'Input Pelanggaran',
+    'input-kredit-poin': 'Input Kredit Poin',
+    'rekap-pelanggaran-guru': 'Rekapitulasi Pelanggaran',
+    'rekap-kredit-poin': 'Rekap Kredit Poin',
+    'bimbingan-kesiswaan': 'Bimbingan Kesiswaan',
+    'kehadiran': 'Input Kehadiran',
+    'statistik-kehadiran': 'Statistik Kesiswaan',
+    'rekap-ketidakhadiran-sekre': 'Rekap Ketidakhadiran',
+    'walas-siswa-kelas': 'Daftar Siswa Kelas'
+  };
+
+  const titleEl = document.getElementById('pageTitle');
+  if (titleEl) {
+    titleEl.textContent = titles[currentPage] || 'Dashboard';
+  }
+
+  // SAKLAR SELEKSI HALAMAN UTAMA (SWITCH CASE)
+  switch (currentPage) {
+    case 'dashboard':
+      renderDashboardKesiswaanBaru();
+      break;
+    case 'admin-kelas':
+      renderAdminKelas();
+      break;
+    case 'rekap-pelanggaran':
+      renderRekapPelanggaran();
+      break;
+    case 'rekap-ketidakhadiran':
+      renderRekapKetidakhadiran();
+      break;
+    case 'catatan-pelanggaran':
+      renderCatatanPelanggaran();
+      break;
+    case 'admin-guru':
+      renderAdminGuru();
+      break;
+    case 'admin-siswa':
+      renderAdminSiswa();
+      break;
+    case 'admin-backup':
+      renderHalamanBackup();
+      break;
+    case 'admin-sekretaris':
+      renderAdminSekretaris();
+      break;
+    case 'admin-identitas':
+      renderAdminIdentitas();
+      break;
+    case 'admin-tatatertib':
+      renderKelolaTataTertib();
+      break;
+    case 'admin-kredit-poin':
+      renderKelolaKreditPoin();
+      break;
+    case 'audit-log':
+      renderAuditLog();
+      break;
+    case 'input-data-pelajar':
+      renderInputDataPelajar();
+      break;
+    case 'data-induk-siswa': // 🟢 CASE HALAMAN BARU
+      if (typeof renderDataIndukSiswa === 'function') {
+        renderDataIndukSiswa();
+      } else {
+        mc.innerHTML = '<p class="p-4 text-gray-500">Fungsi renderDataIndukSiswa belum dimuat</p>';
       }
-
-      // Daftar Judul Halaman Lengkap
-      const titles = {
-        'dashboard': 'Dashboard',
-        'admin-kelas': 'Kelola Kelas',
-        'rekap-pelanggaran': 'Rekap Pelanggaran',
-        'rekap-ketidakhadiran': 'Rekap Ketidakhadiran',
-        'catatan-pelanggaran': 'Catatan Pelanggaran',
-        'admin-guru': 'Kelola Guru',
-        'admin-siswa': 'Kelola Siswa',
-        'admin-backup': 'Backup Data',
-        'admin-sekretaris': 'Kelola Sekretaris',
-        'admin-identitas': 'Identitas Sekolah',
-        'admin-tatatertib': 'Kelola Tata Tertib',
-        'admin-kredit-poin': 'Kelola Kredit Poin',
-        'audit-log': 'Audit Log',
-        'input-data-pelajar': 'Input Data Pelajar',
-        'cetak-kartu-pelajar': 'Cetak Kartu Pelajar',
-        'input-pelanggaran': 'Input Pelanggaran',
-        'input-kredit-poin': 'Input Kredit Poin',
-        'rekap-pelanggaran-guru': 'Rekapitulasi Pelanggaran',
-        'rekap-kredit-poin': 'Rekap Kredit Poin',
-        'bimbingan-kesiswaan': 'Bimbingan Kesiswaan',
-        'kehadiran': 'Input Kehadiran',
-        'statistik-kehadiran': 'Statistik Kesiswaan',
-        'rekap-ketidakhadiran-sekre': 'Rekap Ketidakhadiran',
-        'walas-siswa-kelas': 'Daftar Siswa Kelas'
-      };
-
-      const titleEl = document.getElementById('pageTitle');
-      if (titleEl) {
-        titleEl.textContent = titles[currentPage] || 'Dashboard';
+      break;
+    case 'cetak-kartu-pelajar':
+      renderCetakKartuPelajar();
+      break;
+    case 'input-pelanggaran':
+      renderInputPelanggaran();
+      break;
+    case 'input-kredit-poin':
+      renderInputKreditPoin();
+      break;
+    case 'rekap-pelanggaran-guru':
+      renderRekapPelanggaranGuru();
+      break;
+    case 'rekap-kredit-poin':
+      renderRekapKreditPoin();
+      break;
+    case 'bimbingan-kesiswaan':
+      renderBimbinganKesiswaan();
+      break;
+    case 'kehadiran':
+      renderKehadiran();
+      break;
+    case 'statistik-kehadiran':
+      renderHalamanStatistikKehadiran();
+      break;
+    case 'rekap-ketidakhadiran-sekre':
+      renderRekapKetidakhadiranSekre();
+      break;
+    case 'walas-siswa-kelas':
+      if (typeof renderWalasSiswaKelas === 'function') {
+        renderWalasSiswaKelas();
+      } else {
+        mc.innerHTML = '<p class="p-4 text-gray-500">Fungsi renderWalasSiswaKelas belum dimuat</p>';
       }
+      break;
+    default:
+      renderDashboardKesiswaanBaru();
+  }
 
-      // SAKLAR SELEKSI HALAMAN UTAMA (SWITCH CASE)
-      switch (currentPage) {
-        case 'dashboard':
-          renderDashboardKesiswaanBaru();
-          break;
-        case 'admin-kelas':
-          renderAdminKelas();
-          break;
-        case 'rekap-pelanggaran':
-          renderRekapPelanggaran();
-          break;
-        case 'rekap-ketidakhadiran':
-          renderRekapKetidakhadiran();
-          break;
-        case 'catatan-pelanggaran':
-          renderCatatanPelanggaran();
-          break;
-        case 'admin-guru':
-          renderAdminGuru();
-          break;
-        case 'admin-siswa':
-          renderAdminSiswa();
-          break;
-        case 'admin-backup':
-          renderHalamanBackup();
-          break;
-        case 'admin-sekretaris':
-          renderAdminSekretaris();
-          break;
-        case 'admin-identitas':
-          renderAdminIdentitas();
-          break;
-        case 'admin-tatatertib':
-          renderKelolaTataTertib();
-          break;
-        case 'admin-kredit-poin':
-          renderKelolaKreditPoin();
-          break;
-        case 'audit-log':
-          renderAuditLog();
-          break;
-        case 'input-data-pelajar':
-          renderInputDataPelajar();
-          break;
-        case 'cetak-kartu-pelajar':
-          renderCetakKartuPelajar();
-          break;
-        case 'input-pelanggaran':
-          renderInputPelanggaran();
-          break;
-        case 'input-kredit-poin':
-          renderInputKreditPoin();
-          break;
-        case 'rekap-pelanggaran-guru':
-          renderRekapPelanggaranGuru();
-          break;
-        case 'rekap-kredit-poin':
-          renderRekapKreditPoin();
-          break;
-        case 'bimbingan-kesiswaan':
-          renderBimbinganKesiswaan();
-          break;
-        case 'kehadiran':
-          renderKehadiran();
-          break;
-        case 'statistik-kehadiran':
-          renderHalamanStatistikKehadiran();
-          break;
-        case 'rekap-ketidakhadiran-sekre':
-          renderRekapKetidakhadiranSekre();
-          break;
-        case 'walas-siswa-kelas':
-          if (typeof renderWalasSiswaKelas === 'function') {
-            renderWalasSiswaKelas();
-          } else {
-            mc.innerHTML = '<p class="p-4 text-gray-500">Fungsi renderWalasSiswaKelas belum dimuat</p>';
-          }
-          break;
-        default:
-          renderDashboardKesiswaanBaru(); // Fallback otomatis render Dashboard jika halaman tidak dikenal
+  setTimeout(() => {
+    const semuaTombol = mc.querySelectorAll('button');
+    semuaTombol.forEach(btn => {
+      const teksTombol = btn.textContent.trim().toLowerCase();
+      if (teksTombol === 'menu utama' || teksTombol === 'daftar siswa kelas') {
+        btn.remove();
       }
+    });
+  }, 10);
 
-      // =========================================================================
-      // PENGHAPUS OTOMATIS: Menyingkirkan Tombol "Menu Utama" & "Daftar Siswa Kelas"
-      // =========================================================================
-      setTimeout(() => {
-        const semuaTombol = mc.querySelectorAll('button');
-        semuaTombol.forEach(btn => {
-          const teksTombol = btn.textContent.trim().toLowerCase();
-          if (teksTombol === 'menu utama' || teksTombol === 'daftar siswa kelas') {
-            btn.remove();
-          }
-        });
-      }, 10);
-
-      if (window.lucide) {
-        lucide.createIcons();
-      }
-    }
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
 
     // ===== DASHBOARD =====
 // ===================================================================
@@ -2937,53 +2930,164 @@ function pilihSiswaCP(id){
       document.getElementById('cpKelas').value = s ? s.kelas : '';
     }
 
-    function generateSuratCP() {
-      const sid = document.getElementById('cariSiswaCP').value;
-      if (!sid) { showToast('Pilih siswa terlebih dahulu', 'error'); return; }
-      const s = DB.siswa.find(x => x.id == sid);
-      if (!s) { showToast('Siswa tidak ditemukan', 'error'); return; }
+// ===================================================================
+// KODE SURAT CATATAN PELANGGARAN & REMISI (PELANGGARAN -, REMISI +)
+// ===================================================================
 
-      const pel = DB.pelanggaran.filter(p => p.siswaId == sid).map(p => {
-        const tt = DB.tatatertib.find(t => t.id === p.jenisId || t.id === p.tatatertibId);
-        return {
-          tanggal: p.tanggal || '12/01/2026',
-          jenis: tt ? (tt.deskripsi || tt.jenis) : (p.pelanggaran || 'Pelanggaran Aturan'),
-          ket: 'Tata Tertib',
-          poin: tt ? parseInt(tt.poin) : (parseInt(p.poin) || 5)
-        };
-      });
+function generateSuratCP() {
+  const sid = document.getElementById('cariSiswaCP') ? document.getElementById('cariSiswaCP').value : null;
+  if (!sid) {
+    if (typeof showToast === 'function') showToast('Pilih siswa terlebih dahulu', 'error');
+    else alert('Pilih siswa terlebih dahulu');
+    return;
+  }
 
-      const kh = DB.kehadiran.filter(k => k.siswaId == sid && k.status !== 'hadir').map(k => {
-        let pt = k.status === 'alpa' ? 3 : k.status === 'izin' ? 1 : 0.5;
-        return {
-          tanggal: k.tanggal || '15/01/2026',
-          jenis: 'Ketidakhadiran Kelas (Status: ' + k.status.toUpperCase() + ')',
-          ket: 'Absensi',
-          poin: pt
-        };
-      });
+  const s = (DB.siswa || []).find(x => String(x.id) === String(sid));
+  if (!s) {
+    if (typeof showToast === 'function') showToast('Siswa tidak ditemukan', 'error');
+    else alert('Siswa tidak ditemukan');
+    return;
+  }
 
-      const all = [...pel, ...kh].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
-      const totalPoin = all.reduce((sum, r) => sum + r.poin, 0);
+  // Tanggal default hari ini (YYYY-MM-DD)
+  const tglDefault = new Date().toISOString().split('T')[0];
 
-      const now = new Date();
-      const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-      const tglSurat = `${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
+  // Helper extractor tanggal sinkron dengan Laporan Bimbingan
+  const getTanggal = (obj) => {
+    if (!obj) return '';
+    return obj.tanggal || 
+           obj.tgl || 
+           obj.tglPenebusan || 
+           obj.tgl_penebusan || 
+           obj.tanggalPenebusan || 
+           obj.tanggalEksekusi || 
+           obj.tgl_bimbingan || 
+           obj.tanggal_bimbingan || 
+           obj.created_at || 
+           obj.createdAt || '';
+  };
 
-      const noSuratDefault = "09. /SMK-MPG/  /2026";
+  // 1. Ambil data Pelanggaran Tata Tertib (BERNILAI NEGATIF)
+  const pel = (DB.pelanggaran || []).filter(p => p && (String(p.siswaId) === String(sid) || String(p.idSiswa) === String(sid))).map(p => {
+    const tt = (DB.tatatertib || []).find(t => t && (String(t.id) === String(p.jenisId) || String(t.kode) === String(p.jenisId)));
+    const nilaiPoin = tt ? parseInt(tt.poin) : (parseInt(p.poin) || parseInt(p.skor) || 0);
+    return {
+      tanggal: getTanggal(p) || tglDefault,
+      jenis: tt ? (tt.deskripsi || tt.jenis) : (p.pelanggaran || p.namaPelanggaran || 'Pelanggaran Aturan'),
+      ket: 'Tata Tertib',
+      type: 'pelanggaran',
+      poin: -Math.abs(nilaiPoin)
+    };
+  });
 
-      window.currentSuratData = {
-        siswaId: sid, s, pel, kh, all, totalPoin, tglSurat,
-        noSurat: noSuratDefault,
-        paragrafPembuka: "Berdasarkan rekaman data objektif yang tersimpan pada Sistem Informasi Kesiswaan (SIK) sekolah, siswa tersebut di atas memiliki akumulasi poin penilaian perilaku dengan rincian riwayat pelanggaran tata tertib dan ketidakhadiran sebagai berikut:",
-        paragrafPenutup: "Demikian surat keterangan catatan kesiswaan ini diterbitkan dengan sebenar-benarnya berdasarkan rekapitulasi real-time guna dipergunakan sebagai bahan evaluasi wali murid maupun pemenuhan syarat administratif yang diperlukan."
-      };
+  // 2. Ambil data Ketidakhadiran (BERNILAI NEGATIF)
+  const logAbsen = (DB.kehadiran || []).filter(k => 
+    k && (String(k.siswaId || '') === String(sid) || 
+          String(k.idSiswa || '') === String(sid) || 
+          (s.nisn && String(k.nisn || '') === String(s.nisn)))
+  );
 
-      const preview = document.getElementById('suratPreview');
-      preview.classList.remove('hidden');
-      renderSuratPreview();
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+  const kh = logAbsen.filter(k => String(k.status || '').toLowerCase() !== 'hadir').map(k => {
+    const st = String(k.status || '').toUpperCase().trim();
+    let pt = (st === 'A' || st === 'ALFA' || st === 'ALPA') ? 3 : (st === 'I' || st === 'IZIN') ? 1 : 0.5;
+    return {
+      tanggal: getTanggal(k) || tglDefault,
+      jenis: `Ketidakhadiran Kelas (Status: ${st})`,
+      ket: 'Absensi',
+      type: 'pelanggaran',
+      poin: -Math.abs(pt)
+    };
+  });
+
+  // 3. Ambil Remisi dari DB.penebusan_poin (Keterangan & Tanggal Persis Laporan)
+  const remisi1 = (DB.penebusan_poin || []).filter(p => p && (String(p.siswaId) === String(sid) || String(p.idSiswa) === String(sid))).map(p => {
+    // Memeriksa nama aturan penebusan dari ATURAN_PENEBUSAN jika kustom/id tersimpan
+    let namaAturan = p.instrumen || p.kegiatan || p.tindakan || p.keterangan || p.alasan;
+    if (!namaAturan && typeof ATURAN_PENEBUSAN !== 'undefined') {
+      const matchAturan = ATURAN_PENEBUSAN.find(a => String(a.id) === String(p.aturanId || p.jenisId));
+      if (matchAturan) namaAturan = matchAturan.nama;
     }
+
+    return {
+      tanggal: getTanggal(p) || tglDefault,
+      jenis: namaAturan || 'Penebusan Poin / Kegiatan Positif',
+      ket: 'Remisi Poin',
+      type: 'remisi',
+      poin: Math.abs(Number(p.poinPemulihan || p.poin || p.jumlahPoin || p.nilaiKredit) || 0)
+    };
+  });
+
+  // 4. Ambil Remisi dari DB.remisi
+  const remisi2 = (DB.remisi || []).filter(r => r && (String(r.siswaId) === String(sid) || String(r.idSiswa) === String(sid))).map(r => ({
+    tanggal: getTanggal(r) || tglDefault,
+    jenis: r.instrumen || r.kegiatan || r.keterangan || r.alasan || 'Pengurangan Poin / Remisi',
+    ket: 'Remisi Poin',
+    type: 'remisi',
+    poin: Math.abs(Number(r.poin || r.poinPemulihan || r.nilaiKredit) || 0)
+  }));
+
+  // 5. Ambil Remisi/Tindakan dari DB.bimbingan / DB.riwayatTindakan
+  const remisi3 = (DB.bimbingan || []).concat(DB.riwayatTindakan || []).filter(b => {
+    if (!b) return false;
+    const matchSiswa = String(b.siswaId) === String(sid) || String(b.idSiswa) === String(sid);
+    const hasPoinRemisi = Number(b.poinPemulihan || b.poinRemisi || b.poin) > 0;
+    const isJenisRemisi = b.kategori && String(b.kategori).toLowerCase().includes('remisi');
+    return matchSiswa && (hasPoinRemisi || isJenisRemisi);
+  }).map(b => ({
+    tanggal: getTanggal(b) || tglDefault,
+    jenis: b.solusi || b.uraian || b.kegiatan || b.keterangan || b.tindakLanjut || 'Pemulihan Poin / Bimbingan Kesiswaan',
+    ket: 'Remisi Poin',
+    type: 'remisi',
+    poin: Math.abs(Number(b.poinPemulihan || b.poinRemisi || b.poin) || 0)
+  }));
+
+  const listRemisi = [...remisi1, ...remisi2, ...remisi3];
+
+  // Helper parser tanggal pengurutan
+  const parseTanggal = (dStr) => {
+    if (!dStr) return new Date(0);
+    if (typeof dStr === 'string' && dStr.includes('/')) {
+      const parts = dStr.trim().split('/');
+      if (parts[0].length === 4) return new Date(dStr);
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+    return new Date(dStr);
+  };
+
+  // Gabung & Urutkan Kronologis (Lama ke Baru)
+  const all = [...pel, ...kh, ...listRemisi].sort((a, b) => parseTanggal(a.tanggal) - parseTanggal(b.tanggal));
+
+  // Kalkulasi Total Poin
+  let totalPelanggaran = 0;
+  let totalRemisi = 0;
+
+  all.forEach(item => {
+    if (item.poin < 0) {
+      totalPelanggaran += item.poin;
+    } else {
+      totalRemisi += item.poin;
+    }
+  });
+
+  const sisaPoin = totalPelanggaran + totalRemisi;
+
+  const now = new Date();
+  const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const tglSurat = `${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
+
+  window.currentSuratData = {
+    siswaId: sid, s, pel, kh, listRemisi, all,
+    totalPelanggaran, totalRemisi, sisaPoin, tglSurat,
+    noSurat: "09. /SMK-MPG/ /2026",
+    paragrafPembuka: "Berdasarkan rekaman data objektif yang tersimpan pada Sistem Informasi Kesiswaan (SIK) sekolah, siswa tersebut di atas memiliki akumulasi poin penilaian perilaku dengan rincian riwayat pelanggaran tata tertib, ketidakhadiran, serta perolehan remisi/penebusan poin sebagai berikut:",
+    paragrafPenutup: "Demikian surat keterangan catatan kesiswaan ini diterbitkan dengan sebenar-benarnya berdasarkan rekapitulasi real-time guna dipergunakan sebagai bahan evaluasi wali murid maupun pemenuhan syarat administratif yang diperlukan."
+  };
+
+  const preview = document.getElementById('suratPreview');
+  if (preview) preview.classList.remove('hidden');
+  if (typeof renderSuratPreview === 'function') renderSuratPreview();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
 
 function renderSuratPreview() {
   const d = window.currentSuratData;
@@ -2994,7 +3098,6 @@ function renderSuratPreview() {
   const namaKepsek = (DB.identitas && DB.identitas.kepsek) ? DB.identitas.kepsek : 'Drs. H. Ahmad Saiful, M.Pd.';
   const nipKepsek = (DB.identitas && DB.identitas.nipKepsek) ? DB.identitas.nipKepsek : '19740823 200112 1 002';
 
-  // Dynamic Logo: Ambil Logo Provinsi dan Logo Sekolah dari Identitas
   const logoProvinsi = (DB.identitas && DB.identitas.logoProvinsi) 
     ? DB.identitas.logoProvinsi 
     : 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_Central_Sulawesi.svg';
@@ -3002,18 +3105,26 @@ function renderSuratPreview() {
     ? (DB.identitas.logo || DB.identitas.logoSekolah) 
     : '';
 
-  let rowsHtml = d.all.map((r, i) => `
-    <tr style="page-break-inside: avoid;">
+  // Render Baris Tabel
+  let rowsHtml = d.all.map((r, i) => {
+    const isPositif = r.poin > 0;
+    const colorStyle = isPositif ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;';
+    const rowBg = isPositif ? 'background-color: #f0fdf4;' : ''; 
+    const formattedPoin = isPositif ? `+${r.poin}` : `${r.poin}`;
+
+    return `
+    <tr style="page-break-inside: avoid; ${rowBg}">
       <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">${i + 1}</td>
       <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">${r.tanggal}</td>
       <td style="border: 1px solid #000; padding: 6px 8px;">${r.jenis}</td>
       <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">${r.ket}</td>
-      <td style="border: 1px solid #000; padding: 6px 8px; text-align: center;">+${r.poin}</td>
+      <td style="border: 1px solid #000; padding: 6px 8px; text-align: center; ${colorStyle}">${formattedPoin}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   if (d.all.length === 0) {
-    rowsHtml = `<tr><td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; color:#888;">Tidak ada riwayat pelanggaran atau ketidakhadiran.</td></tr>`;
+    rowsHtml = `<tr><td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; color:#888;">Tidak ada riwayat pelanggaran, ketidakhadiran, maupun remisi.</td></tr>`;
   }
 
   preview.innerHTML = `
@@ -3075,16 +3186,24 @@ function renderSuratPreview() {
           <tr>
             <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; text-align: center; font-weight: bold; width: 5%;">No</th>
             <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; text-align: center; font-weight: bold; width: 15%;">Tanggal</th>
-            <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; font-weight: bold; width: 52%;">Jenis & Deskripsi Pelanggaran / Absensi</th>
-            <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; text-align: center; font-weight: bold; width: 16%;">Kategori</th>
+            <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; font-weight: bold; width: 50%;">Jenis & Deskripsi Pelanggaran / Remisi</th>
+            <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; text-align: center; font-weight: bold; width: 18%;">Kategori</th>
             <th style="border: 1px solid #000; padding: 6px 8px; background-color: #f2f2f2; text-align: center; font-weight: bold; width: 12%;">Poin</th>
           </tr>
         </thead>
         <tbody>
           ${rowsHtml}
-          <tr style="font-weight:bold; background-color:#fcfcfc; page-break-inside: avoid;">
-            <td colspan="4" style="border: 1px solid #000; text-align:right; padding:8px;">TOTAL AKUMULASI POIN KESISWAAN</td>
-            <td style="border: 1px solid #000; text-align:center; color:red;">${d.totalPoin} Poin</td>
+          <tr style="font-weight:bold; background-color:#fafafa; page-break-inside: avoid;">
+            <td colspan="4" style="border: 1px solid #000; text-align:right; padding:6px 8px;">TOTAL POIN PELANGGARAN & ABSENSI</td>
+            <td style="border: 1px solid #000; text-align:center; color:#dc2626;">${d.totalPelanggaran} Poin</td>
+          </tr>
+          <tr style="font-weight:bold; background-color:#f0fdf4; page-break-inside: avoid;">
+            <td colspan="4" style="border: 1px solid #000; text-align:right; padding:6px 8px;">TOTAL REMISI / PEMULIHAN POIN</td>
+            <td style="border: 1px solid #000; text-align:center; color:#059669;">+${d.totalRemisi} Poin</td>
+          </tr>
+          <tr style="font-weight:bold; background-color:#f2f2f2; page-break-inside: avoid;">
+            <td colspan="4" style="border: 1px solid #000; text-align:right; padding:8px;">SISA AKUMULASI POIN AKHIR</td>
+            <td style="border: 1px solid #000; text-align:center; font-size:11pt; color:${d.sisaPoin < 0 ? '#dc2626' : '#059669'};">${d.sisaPoin} Poin</td>
           </tr>
         </tbody>
       </table>
@@ -3408,10 +3527,10 @@ function filterKelasAdmin() {
             Total: ${jmlTotal}
           </span>
           <span class="px-2 py-0.5 bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-300 rounded-md text-xs font-medium" title="Laki-laki">
-            👦 L: ${jmlL}
+            L: ${jmlL}
           </span>
           <span class="px-2 py-0.5 bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded-md text-xs font-medium" title="Perempuan">
-            👧 P: ${jmlP}
+            P: ${jmlP}
           </span>
         </div>
       </td>
@@ -3852,9 +3971,9 @@ function renderAdminSiswa() {
     <div class="flex flex-wrap gap-2">
       <button onclick="showFormSiswa()" class="px-4 py-2 bg-primary-600 text-white rounded-xl text-sm hover:bg-primary-700 font-semibold flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>Tambah Siswa</button>
       <button onclick="hapusSiswaTerpilih()" class="px-4 py-2 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700 font-semibold flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>Hapus Terpilih</button>
-      <button onclick="downloadSiswaTemplate()" class="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>Download Template</button>
-      <button onclick="exportSiswaToExcel()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 font-semibold flex items-center gap-2 shadow-sm transition-all"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Export Excel</button>
-      <label class="px-4 py-2 bg-green-500 text-white rounded-xl text-sm hover:bg-green-600 font-semibold flex items-center gap-2 cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i>Import Excel<input type="file" accept=".csv,.xlsx" onchange="importSiswaExcel(event)" class="hidden"></label>
+      <button onclick="downloadSiswaTemplateLengkap()" class="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 font-semibold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>Download Template (Buku Induk)</button>
+      <button onclick="exportSiswaLengkapToExcel()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 font-semibold flex items-center gap-2 shadow-sm transition-all"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Export Excel Lengkap</button>
+      <label class="px-4 py-2 bg-green-500 text-white rounded-xl text-sm hover:bg-green-600 font-semibold flex items-center gap-2 cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i>Import Excel<input type="file" accept=".csv,.xlsx" onchange="importSiswaExcelLengkap(event)" class="hidden"></label>
       <input id="searchSiswa" oninput="filterSiswaAdmin()" placeholder="Cari siswa / asal sekolah..." class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm flex-1 min-w-[200px]">
       <select id="filterKelasS" onchange="filterSiswaAdmin()" class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"><option value="">Semua Kelas</option>${DB.kelas.map(k => `<option>${k}</option>`).join('')}</select>
     </div>
@@ -3883,16 +4002,15 @@ function renderAdminSiswa() {
     </div>
 
     <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-      <h4 class="font-semibold text-green-900 dark:text-green-200 mb-2">Format Template Import Excel/CSV:</h4>
-      <p class="text-sm text-green-800 dark:text-green-300 mb-2"><strong>Kolom yang dibutuhkan:</strong> Nama, NISN, Kelas, Jenis Kelamin, No HP Orang Tua, Status, Tanggal Masuk, Asal Sekolah</p>
-      <div class="bg-white dark:bg-gray-800 rounded p-2 mt-2 text-xs font-mono text-gray-700 dark:text-gray-300 overflow-x-auto">
-        <p>Nama,NISN,Kelas,Jenis Kelamin,No HP Orang Tua,Status,Tanggal Masuk,Asal Sekolah</p>
-        <p>Ahmad Fauzi,0012345001,X TKJ 1,L,08123456789,Reguler,,</p>
-        <p>Budi Cahyono,0012345002,X TKJ 1,L,08523456781,Pindahan,2026-08-15,SMPN 2 Mepanga</p>
-      </div>
-      <p class="text-xs text-green-700 dark:text-green-400 mt-2">💡 Tanggal masuk berformat <b>YYYY-MM-DD</b> (Contoh: 2026-08-15). Hari-hari sebelum tanggal masuk akan otomatis di-blok abu-abu (-) pada presensi bulanan.</p>
+      <h4 class="font-semibold text-green-900 dark:text-green-200 mb-2">Format Template Import Excel Data Induk Siswa:</h4>
+      <p class="text-sm text-green-800 dark:text-green-300 mb-2">Gunakan fitur <b>Download Template (Buku Induk)</b> untuk mengunduh format Excel dengan seluruh 32 kolom Data Induk Siswa (termasuk data kesehatan, pendidikan asal, dan rincian Orang Tua).</p>
+      <p class="text-xs text-green-700 dark:text-green-400">💡 Semua data yang diimpor/diisi di sini akan otomatis disinkronkan langsung ke menu <b>Data Induk Siswa</b> & cetakan lembar Buku Induk F4.</p>
     </div>
-  </div>`;
+  </div>
+  
+  <!-- Container Modal Detail -->
+  <div id="modalDetailSiswa" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"></div>`;
+  
   filterSiswaAdmin();
 }
 
@@ -3900,43 +4018,54 @@ function filterSiswaAdmin() {
   const searchInput = document.getElementById('searchSiswa');
   const kelasSelect = document.getElementById('filterKelasS');
 
-  // Ambil nilai input dan bersihkan whitespace
   const search = (searchInput?.value || '').trim().toLowerCase();
-  const kelas = kelasSelect?.value || '';
+  const kelas = (kelasSelect?.value || '').trim();
 
   let data = [...(DB.siswa || [])];
 
-  // 1. Filter Berdasarkan Kelas (Jika kelas dipilih)
+  // 1. Filter Efisien
   if (kelas) {
-    data = data.filter(s => String(s.kelas || '').trim() === kelas.trim());
+    data = data.filter(s => (s.kelas || '').trim() === kelas);
   }
 
-  // 2. Filter Berdasarkan Kata Kunci Pencarian (Nama, NISN, atau Asal Sekolah)
   if (search) {
     data = data.filter(s => {
-      const nama = String(s.nama || '').toLowerCase();
-      const nisn = String(s.nisn || '').toLowerCase();
-      const asalSekolah = String(s.asalSekolah || '').toLowerCase();
-
-      return nama.includes(search) || nisn.includes(search) || asalSekolah.includes(search);
+      const nama = (s.nama || '').toLowerCase();
+      const nisn = (s.nisn || '').toLowerCase();
+      const asal = (s.asalSekolah || '').toLowerCase();
+      return nama.includes(search) || nisn.includes(search) || asal.includes(search);
     });
   }
 
-  // 3. Urutkan Data (Berdasarkan Kelas -> Nama)
+  // 2. Sorting Cepat (Optimasi Pembanding String)
   data.sort((a, b) => {
-    const k = (a.kelas || '').localeCompare(b.kelas || '', 'id', { numeric: true });
-    if (k !== 0) return k;
-    return (a.nama || '').localeCompare(b.nama || '', 'id');
+    const ka = a.kelas || '';
+    const kb = b.kelas || '';
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    
+    const na = a.nama || '';
+    const nb = b.nama || '';
+    return na < nb ? -1 : (na > nb ? 1 : 0);
   });
 
-  // 4. Render ke Tabel
   const body = document.getElementById('bodySiswaAdmin');
   if (!body) return;
 
-  body.innerHTML = data.length ? data.map(s => {
+  // 3. Render Super Cepat Menggunakan DocumentFragment (Menghindari Freeze UI)
+  if (data.length === 0) {
+    body.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-gray-400">Tidak ada data siswa yang cocok</td></tr>`;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  
+  data.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.className = "border-t dark:border-gray-700/50";
+
     const isPindahan = s.statusSiswa === 'Pindahan' || !!s.tglMasuk;
-    
-    return `<tr class="border-t dark:border-gray-700/50">
+
+    tr.innerHTML = `
       <td class="py-3 px-4 text-center">
         <input type="checkbox" class="cekSiswa" value="${s.id}">
       </td>
@@ -3947,7 +4076,7 @@ function filterSiswaAdmin() {
       <td class="py-3 px-4">
         ${isPindahan ? `
           <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-full text-xs font-semibold">
-            <span>🔄 Pindahan</span>
+            🔄 Pindahan
           </span>
           <div class="text-[11px] text-gray-500 mt-0.5">Masuk: ${s.tglMasuk || '-'}</div>
         ` : `
@@ -3958,22 +4087,416 @@ function filterSiswaAdmin() {
       </td>
       <td class="py-3 px-4 text-gray-600 dark:text-gray-400">${s.asalSekolah || '-'}</td>
       <td class="py-3 px-4">${s.hpOrangTua || '-'}</td>
-      <td class="py-3 px-4 flex gap-2">
-        <button onclick="editSiswa('${s.id}')" class="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 flex items-center gap-1">
+      <td class="py-3 px-4 flex gap-1.5">
+        <button onclick="lihatDetailSiswa('${s.id}')" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 font-medium">
+          👁️ Detail
+        </button>
+        <button onclick="editSiswa('${s.id}')" class="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600">
           ✏️ Edit
         </button>
         <button onclick="deleteSiswa('${s.id}')" class="text-red-500 hover:text-red-700 p-1">
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          🗑️
         </button>
       </td>
-    </tr>`;
-  }).join('') : `<tr><td colspan="9" class="py-8 text-center text-gray-400">Tidak ada data siswa yang cocok</td></tr>`;
+    `;
+    fragment.appendChild(tr);
+  });
 
-  if (typeof lucide !== 'undefined') {
-    lucide.createIcons();
+  // Masukkan semua baris sekaligus dalam 1 proses reflow
+  body.innerHTML = '';
+  body.appendChild(fragment);
+
+  // Panggil Lucide Icons hanya jika diperlukan
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    requestAnimationFrame(() => lucide.createIcons());
   }
 }
 
+/* =========================================================
+   FUNGSI DETAIL SISWA (MODAL POPUP BUKU INDUK)
+   ========================================================= */
+function lihatDetailSiswa(id) {
+  const s = DB.siswa.find(x => String(x.id) === String(id));
+  if (!s) return;
+
+  const kData = (DB.kelengkapanData || []).find(k => String(k.siswaId) === String(id)) || {};
+  const m = document.getElementById('modalDetailSiswa');
+
+  m.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border dark:border-gray-700">
+      <div class="flex items-center justify-between border-b pb-3 mb-4">
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 dark:text-white">Detail Data Induk Siswa</h3>
+          <p class="text-xs text-gray-500">${s.nama} (${s.nisn})</p>
+        </div>
+        <button onclick="document.getElementById('modalDetailSiswa').classList.add('hidden')" class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <!-- Foto & Informasi Utama -->
+        <div class="flex gap-4 items-start bg-gray-50 dark:bg-gray-700/40 p-3 rounded-xl border dark:border-gray-700">
+          <div class="w-20 h-24 border border-gray-300 bg-white flex items-center justify-center rounded overflow-hidden flex-shrink-0">
+            ${kData.foto || s.pasFoto ? `<img src="${kData.foto || s.pasFoto}" class="w-full h-full object-cover">` : '<span class="text-[10px] text-gray-400 text-center">Tidak ada foto</span>'}
+          </div>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1 w-full text-gray-700 dark:text-gray-300">
+            <div><b>Nama Lengkap:</b> ${s.nama || '-'}</div>
+            <div><b>NISN:</b> ${s.nisn || '-'}</div>
+            <div><b>Kelas:</b> ${s.kelas || '-'}</div>
+            <div><b>Jenis Kelamin:</b> ${s.jk === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+            <div><b>Status Siswa:</b> ${s.statusSiswa || 'Reguler'}</div>
+            <div><b>Tanggal Masuk:</b> ${s.tglMasuk || '-'}</div>
+            <div class="col-span-2"><b>Asal Sekolah:</b> ${s.asalSekolah || '-'}</div>
+          </div>
+        </div>
+
+        <!-- Section A: Keterangan Diri -->
+        <div>
+          <h4 class="font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">A. Keterangan Diri Siswa</h4>
+          <div class="grid grid-cols-2 gap-2 mt-2 px-2 text-gray-700 dark:text-gray-300">
+            <p><b>Nama Panggilan:</b> ${kData.namaPanggilan || '-'}</p>
+            <p><b>TTL:</b> ${(kData.tempatLahir || s.tempatLahir || '') + ', ' + (kData.tanggalLahir || s.tanggalLahir || '')}</p>
+            <p><b>Agama:</b> ${kData.agama || '-'}</p>
+            <p><b>Kewarganegaraan:</b> ${kData.kewarganegaraan || 'Indonesia'}</p>
+            <p><b>Anak Ke-:</b> ${kData.anakKe || '-'}</p>
+            <p><b>Jumlah Saudara (K/T/A):</b> ${kData.jmlKandung || 0} / ${kData.jmlTiri || 0} / ${kData.jmlAngkat || 0}</p>
+            <p><b>Status Yatim/Piatu:</b> ${kData.statusAnak || '-'}</p>
+            <p><b>Bahasa Sehari-hari:</b> ${kData.bahasa || '-'}</p>
+          </div>
+        </div>
+
+        <!-- Section B & C: Tempat Tinggal & Kesehatan -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <h4 class="font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">B. Tempat Tinggal</h4>
+            <div class="mt-2 px-2 space-y-1 text-gray-700 dark:text-gray-300">
+              <p><b>Alamat:</b> ${kData.alamat || s.alamat || '-'}</p>
+              <p><b>No HP:</b> ${s.hpOrangTua || kData.hp || '-'}</p>
+              <p><b>Tinggal Dengan:</b> ${kData.tinggalDengan || '-'}</p>
+              <p><b>Jarak ke Sekolah:</b> ${kData.jarakSekolah || '-'}</p>
+            </div>
+          </div>
+          <div>
+            <h4 class="font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">C. Kesehatan</h4>
+            <div class="mt-2 px-2 space-y-1 text-gray-700 dark:text-gray-300">
+              <p><b>Golongan Darah:</b> ${kData.golDarah || '-'}</p>
+              <p><b>Penyakit Pernah Diderita:</b> ${kData.penyakit || '-'}</p>
+              <p><b>Kelainan Jasmani:</b> ${kData.kelainanJasmani || '-'}</p>
+              <p><b>Tinggi / Berat:</b> ${kData.tinggiBadan || '-'} cm / ${kData.beratBadan || '-'} kg</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section D: Pendidikan -->
+        <div>
+          <h4 class="font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">D. Pendidikan Sebelumnya</h4>
+          <div class="grid grid-cols-2 gap-2 mt-2 px-2 text-gray-700 dark:text-gray-300">
+            <p><b>Lulus Dari:</b> ${s.asalSekolah || kData.smpAsal || '-'}</p>
+            <p><b>No STTB / Ijazah:</b> ${kData.noSttb || '-'}</p>
+            <p><b>Lama Belajar:</b> ${kData.lamaBelajarSmp || '-'}</p>
+          </div>
+        </div>
+
+        <!-- Section E: Orang Tua Kandung -->
+        <div>
+          <h4 class="font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded">E. Orang Tua Kandung</h4>
+          <div class="grid grid-cols-2 gap-4 mt-2 px-2 text-gray-700 dark:text-gray-300">
+            <div class="border-r pr-2">
+              <p class="font-bold underline text-gray-800 dark:text-gray-200 mb-1">Data Ayah:</p>
+              <p><b>Nama:</b> ${kData.namaAyah || '-'}</p>
+              <p><b>Agama:</b> ${kData.agamaAyah || '-'}</p>
+              <p><b>Pekerjaan:</b> ${kData.pekerjaanAyah || '-'}</p>
+              <p><b>No HP:</b> ${kData.hpAyah || '-'}</p>
+              <p><b>Penghasilan:</b> ${kData.penghasilanAyah || '-'}</p>
+              <p><b>Status:</b> ${kData.statusAyah || '-'}</p>
+            </div>
+            <div>
+              <p class="font-bold underline text-gray-800 dark:text-gray-200 mb-1">Data Ibu:</p>
+              <p><b>Nama:</b> ${kData.namaIbu || '-'}</p>
+              <p><b>Agama:</b> ${kData.agamaIbu || '-'}</p>
+              <p><b>Pekerjaan:</b> ${kData.pekerjaanIbu || '-'}</p>
+              <p><b>No HP:</b> ${kData.hpIbu || '-'}</p>
+              <p><b>Penghasilan:</b> ${kData.penghasilanIbu || '-'}</p>
+              <p><b>Status:</b> ${kData.statusIbu || '-'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-between items-center pt-3 border-t">
+        <button onclick="previewBukuInduk('${s.id}')" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 flex items-center gap-1.5">
+          🖨️ Cetak Lembar Buku Induk
+        </button>
+        <button onclick="document.getElementById('modalDetailSiswa').classList.add('hidden')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-xs font-semibold">Tutup</button>
+      </div>
+    </div>
+  `;
+
+  m.classList.remove('hidden');
+}
+
+/* =========================================================
+   EKSPOR KELENGKAPAN DATA INDUK KE EXCEL
+   ========================================================= */
+function exportSiswaLengkapToExcel() {
+  let dataSiswa = [...(DB.siswa || [])];
+
+  if (dataSiswa.length === 0) {
+    showToast('Tidak ada data siswa untuk diekspor', 'error');
+    return;
+  }
+
+  const search = (document.getElementById('searchSiswa')?.value || '').toLowerCase();
+  const kelas = document.getElementById('filterKelasS')?.value || '';
+
+  if (kelas) dataSiswa = dataSiswa.filter(s => s.kelas === kelas);
+  if (search) dataSiswa = dataSiswa.filter(s => (s.nama || '').toLowerCase().includes(search));
+
+  dataSiswa.sort((a, b) => {
+    const k = (a.kelas || '').localeCompare(b.kelas || '', 'id', { numeric: true });
+    if (k !== 0) return k;
+    return (a.nama || '').localeCompare(b.nama || '', 'id');
+  });
+
+  const rows = dataSiswa.map((s, index) => {
+    const k = (DB.kelengkapanData || []).find(x => String(x.siswaId) === String(s.id)) || {};
+    return {
+      "No": index + 1,
+      "Nama Lengkap": s.nama || '',
+      "NISN": s.nisn || '',
+      "Kelas": s.kelas || '',
+      "Jenis Kelamin": s.jk || '',
+      "Status Siswa": s.statusSiswa || 'Reguler',
+      "Tanggal Masuk": s.tglMasuk || '',
+      "Nama Panggilan": k.namaPanggilan || '',
+      "Tempat Lahir": k.tempatLahir || s.tempatLahir || '',
+      "Tanggal Lahir": k.tanggalLahir || s.tanggalLahir || '',
+      "Agama": k.agama || '',
+      "Kewarganegaraan": k.kewarganegaraan || 'Indonesia',
+      "Anak Ke": k.anakKe || '',
+      "Jml Saudara Kandung": k.jmlKandung || 0,
+      "Jml Saudara Tiri": k.jmlTiri || 0,
+      "Jml Saudara Angkat": k.jmlAngkat || 0,
+      "Status Yatim Piatu": k.statusAnak || '',
+      "Bahasa Sehari-hari": k.bahasa || '',
+      "Alamat Siswa": k.alamat || s.alamat || '',
+      "No HP Siswa Ortu": s.hpOrangTua || k.hp || '',
+      "Tinggal Dengan": k.tinggalDengan || '',
+      "Jarak Sekolah": k.jarakSekolah || '',
+      "Golongan Darah": k.golDarah || '',
+      "Penyakit Pernah Diderita": k.penyakit || '',
+      "Kelainan Jasmani": k.kelainanJasmani || '',
+      "Tinggi Badan (cm)": k.tinggiBadan || '',
+      "Berat Badan (kg)": k.beratBadan || '',
+      "Asal Sekolah (SMP/MTS)": s.asalSekolah || k.smpAsal || '',
+      "No STTB Ijazah": k.noSttb || '',
+      "Lama Belajar SMP": k.lamaBelajarSmp || '',
+      "Nama Ayah": k.namaAyah || '',
+      "Agama Ayah": k.agamaAyah || '',
+      "Pekerjaan Ayah": k.pekerjaanAyah || '',
+      "No HP Ayah": k.hpAyah || '',
+      "Alamat Ayah": k.alamatAyah || '',
+      "Penghasilan Ayah": k.penghasilanAyah || '',
+      "Status Ayah": k.statusAyah || '',
+      "Nama Ibu": k.namaIbu || '',
+      "Agama Ibu": k.agamaIbu || '',
+      "Pekerjaan Ibu": k.pekerjaanIbu || '',
+      "No HP Ibu": k.hpIbu || '',
+      "Alamat Ibu": k.alamatIbu || '',
+      "Penghasilan Ibu": k.penghasilanIbu || '',
+      "Status Ibu": k.statusIbu || ''
+    };
+  });
+
+  try {
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Induk Siswa");
+
+    const labelKelas = kelas ? `_Kelas_${kelas.replace(/\s+/g, '_')}` : '_Semua_Kelas';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    
+    XLSX.writeFile(workbook, `Data_Induk_Siswa_Lengkap${labelKelas}_${timestamp}.xlsx`);
+    showToast('Data Induk Siswa berhasil diekspor', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Gagal mengunduh Excel: ' + err.message, 'error');
+  }
+}
+
+/* =========================================================
+   DOWNLOAD TEMPLATE DAN IMPOR BUKU INDUK
+   ========================================================= */
+function downloadSiswaTemplateLengkap() {
+  const sample = [{
+    "Nama Lengkap": "Ahmad Fauzi",
+    "NISN": "0012345678",
+    "Kelas": "X TKJ 1",
+    "Jenis Kelamin": "L",
+    "Status Siswa": "Reguler",
+    "Tanggal Masuk": "",
+    "Nama Panggilan": "Ahmad",
+    "Tempat Lahir": "Mepanga",
+    "Tanggal Lahir": "2008-05-12",
+    "Agama": "Islam",
+    "Kewarganegaraan": "Indonesia",
+    "Anak Ke": "1",
+    "Jml Saudara Kandung": "2",
+    "Jml Saudara Tiri": "0",
+    "Jml Saudara Angkat": "0",
+    "Status Yatim Piatu": "Lengkap",
+    "Bahasa Sehari-hari": "Indonesia",
+    "Alamat Siswa": "Desa Mepanga RT 02/01",
+    "No HP Siswa Ortu": "081234567890",
+    "Tinggal Dengan": "Orang Tua",
+    "Jarak Sekolah": "1 km",
+    "Golongan Darah": "O",
+    "Penyakit Pernah Diderita": "-",
+    "Kelainan Jasmani": "-",
+    "Tinggi Badan (cm)": "165",
+    "Berat Badan (kg)": "55",
+    "Asal Sekolah (SMP/MTS)": "SMPN 1 Mepanga",
+    "No STTB Ijazah": "DN-01/d-12345",
+    "Lama Belajar SMP": "3 Tahun",
+    "Nama Ayah": "Budi Santoso",
+    "Agama Ayah": "Islam",
+    "Pekerjaan Ayah": "Petani",
+    "No HP Ayah": "081234567890",
+    "Alamat Ayah": "Desa Mepanga",
+    "Penghasilan Ayah": "Rp 2.000.000",
+    "Status Ayah": "Masih Hidup",
+    "Nama Ibu": "Siti Aminah",
+    "Agama Ibu": "Islam",
+    "Pekerjaan Ibu": "Ibu Rumah Tangga",
+    "No HP Ibu": "081234567891",
+    "Alamat Ibu": "Desa Mepanga",
+    "Penghasilan Ibu": "-",
+    "Status Ibu": "Masih Hidup"
+  }];
+
+  const ws = XLSX.utils.json_to_sheet(sample);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Template_Buku_Induk");
+  XLSX.writeFile(wb, "Template_Import_Data_Induk_Siswa.xlsx");
+}
+
+async function importSiswaExcelLengkap(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+
+      if (!json || json.length === 0) {
+        showToast("File Excel kosong!", "error");
+        return;
+      }
+
+      if (!DB.kelengkapanData) DB.kelengkapanData = [];
+
+      let importedCount = 0;
+
+      json.forEach(row => {
+        const nama = row["Nama Lengkap"] || row["Nama"];
+        const nisn = String(row["NISN"] || '').trim();
+
+        if (nama && nisn) {
+          // Cari atau buat siswa
+          let siswaExist = DB.siswa.find(s => String(s.nisn) === nisn);
+          let siswaId = siswaExist ? siswaExist.id : ('SIS-' + Date.now() + '-' + Math.floor(Math.random()*1000));
+
+          const objSiswa = {
+            id: siswaId,
+            nama: String(nama).trim(),
+            nisn: nisn,
+            kelas: row["Kelas"] || 'X TKJ 1',
+            jk: row["Jenis Kelamin"] === 'Laki-laki' ? 'L' : (row["Jenis Kelamin"] === 'Perempuan' ? 'P' : (row["Jenis Kelamin"] || 'L')),
+            statusSiswa: row["Status Siswa"] || row["Status"] || 'Reguler',
+            tglMasuk: row["Tanggal Masuk"] || '',
+            asalSekolah: row["Asal Sekolah (SMP/MTS)"] || row["Asal Sekolah"] || '',
+            hpOrangTua: String(row["No HP Siswa Ortu"] || row["No HP Orang Tua"] || '')
+          };
+
+          if (siswaExist) {
+            Object.assign(siswaExist, objSiswa);
+          } else {
+            DB.siswa.push(objSiswa);
+          }
+
+          // Sinkronisasi ke DB.kelengkapanData
+          let kIdx = DB.kelengkapanData.findIndex(k => String(k.siswaId) === String(siswaId));
+          const objKelengkapan = {
+            siswaId: siswaId,
+            namaPanggilan: row["Nama Panggilan"] || '',
+            tempatLahir: row["Tempat Lahir"] || '',
+            tanggalLahir: row["Tanggal Lahir"] || '',
+            agama: row["Agama"] || '',
+            kewarganegaraan: row["Kewarganegaraan"] || 'Indonesia',
+            anakKe: row["Anak Ke"] || '',
+            jmlKandung: row["Jml Saudara Kandung"] || 0,
+            jmlTiri: row["Jml Saudara Tiri"] || 0,
+            jmlAngkat: row["Jml Saudara Angkat"] || 0,
+            statusAnak: row["Status Yatim Piatu"] || '',
+            bahasa: row["Bahasa Sehari-hari"] || '',
+            alamat: row["Alamat Siswa"] || '',
+            hp: String(row["No HP Siswa Ortu"] || ''),
+            tinggalDengan: row["Tinggal Dengan"] || '',
+            jarakSekolah: row["Jarak Sekolah"] || '',
+            golDarah: row["Golongan Darah"] || '',
+            penyakit: row["Penyakit Pernah Diderita"] || '',
+            kelainanJasmani: row["Kelainan Jasmani"] || '',
+            tinggiBadan: row["Tinggi Badan (cm)"] || '',
+            beratBadan: row["Berat Badan (kg)"] || '',
+            smpAsal: row["Asal Sekolah (SMP/MTS)"] || '',
+            noSttb: row["No STTB Ijazah"] || '',
+            lamaBelajarSmp: row["Lama Belajar SMP"] || '',
+            namaAyah: row["Nama Ayah"] || '',
+            agamaAyah: row["Agama Ayah"] || '',
+            pekerjaanAyah: row["Pekerjaan Ayah"] || '',
+            hpAyah: String(row["No HP Ayah"] || ''),
+            alamatAyah: row["Alamat Ayah"] || '',
+            penghasilanAyah: row["Penghasilan Ayah"] || '',
+            statusAyah: row["Status Ayah"] || '',
+            namaIbu: row["Nama Ibu"] || '',
+            agamaIbu: row["Agama Ibu"] || '',
+            pekerjaanIbu: row["Pekerjaan Ibu"] || '',
+            hpIbu: String(row["No HP Ibu"] || ''),
+            alamatIbu: row["Alamat Ibu"] || '',
+            penghasilanIbu: row["Penghasilan Ibu"] || '',
+            statusIbu: row["Status Ibu"] || ''
+          };
+
+          if (kIdx > -1) {
+            Object.assign(DB.kelengkapanData[kIdx], objKelengkapan);
+          } else {
+            DB.kelengkapanData.push(objKelengkapan);
+          }
+
+          importedCount++;
+        }
+      });
+
+      await simpanDataKeStorage("siswa");
+      await simpanDataKeStorage("kelengkapanData");
+
+      addAuditLog(`Import Data Induk Siswa (${importedCount} data)`);
+      showToast(`Berhasil mengimpor ${importedCount} Data Induk Siswa`, "success");
+      renderAdminSiswa();
+    } catch (err) {
+      console.error(err);
+      showToast("Gagal membaca file Excel!", "error");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* =========================================================
+   FORM PENAMBAHAN/EDIT SINGKAT
+   ========================================================= */
 function showFormSiswa(editData = null) {
   const c = document.getElementById('formSiswaContainer');
   c.classList.remove('hidden');
@@ -4005,7 +4528,6 @@ function showFormSiswa(editData = null) {
         </select>
       </div>
 
-      <!-- KETERANGAN SISWA PINDAHAN -->
       <div>
         <label class="block text-sm mb-1" for="fsStatusSiswa">Status Keanggotaan Siswa</label>
         <select id="fsStatusSiswa" onchange="toggleFormPindahan()" class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm font-medium">
@@ -4045,7 +4567,6 @@ function toggleFormPindahan() {
   if (st === 'Pindahan') {
     boxTgl.classList.remove('hidden');
     boxAsal.classList.remove('hidden');
-    // Set default tanggal hari ini jika masih kosong
     const tglInput = document.getElementById('fsTglMasuk');
     if (!tglInput.value) {
       tglInput.value = new Date().toISOString().slice(0, 10);
@@ -4094,7 +4615,6 @@ async function saveSiswa(id) {
     DB.siswa.push(data);
   }
 
-  // Urutkan data secara otomatis
   DB.siswa.sort((a, b) => {
     const k = (a.kelas || '').localeCompare(b.kelas || '', 'id', { numeric: true });
     if (k !== 0) return k;
@@ -4123,11 +4643,15 @@ async function deleteSiswa(id) {
     if (DB.penebusan_poin && Array.isArray(DB.penebusan_poin)) {
       DB.penebusan_poin = DB.penebusan_poin.filter(p => String(p.siswaId) !== String(id));
     }
+    if (DB.kelengkapanData && Array.isArray(DB.kelengkapanData)) {
+      DB.kelengkapanData = DB.kelengkapanData.filter(k => String(k.siswaId) !== String(id));
+    }
 
     await simpanDataKeStorage("siswa");
     await simpanDataKeStorage("kehadiran");
     await simpanDataKeStorage("pelanggaran");
     await simpanDataKeStorage("penebusan_poin");
+    await simpanDataKeStorage("kelengkapanData");
     
     addAuditLog('Hapus Siswa');
     showToast('Data siswa dan riwayatnya berhasil dihapus', 'success');
@@ -4152,78 +4676,19 @@ async function hapusSiswaTerpilih() {
   DB.kehadiran = (DB.kehadiran || []).filter(k => !ids.includes(String(k.siswaId)));
   DB.pelanggaran = (DB.pelanggaran || []).filter(p => !ids.includes(String(p.siswaId)) && !ids.includes(String(p.idSiswa)));
   DB.penebusan_poin = (DB.penebusan_poin || []).filter(p => !ids.includes(String(p.siswaId)));
+  DB.kelengkapanData = (DB.kelengkapanData || []).filter(k => !ids.includes(String(k.siswaId)));
 
   await simpanDataKeStorage("siswa");
   await simpanDataKeStorage("kehadiran");
   await simpanDataKeStorage("pelanggaran");
   await simpanDataKeStorage("penebusan_poin");
+  await simpanDataKeStorage("kelengkapanData");
 
   addAuditLog("Hapus Massal Siswa (" + ids.length + ")");
   showToast(ids.length + " siswa berhasil dihapus", "success");
   renderAdminSiswa();
 }
 
-function exportSiswaToExcel() {
-  const search = (document.getElementById('searchSiswa')?.value || '').toLowerCase();
-  const kelas = document.getElementById('filterKelasS')?.value || '';
-  
-  let dataSiswa = [...(DB.siswa || [])];
-
-  dataSiswa.sort((a, b) => {
-    const k = (a.kelas || '').localeCompare(b.kelas || '', 'id', { numeric: true });
-    if (k !== 0) return k;
-    return (a.nama || '').localeCompare(b.nama || '', 'id');
-  });
-
-  if (kelas) dataSiswa = dataSiswa.filter(s => s.kelas === kelas);
-  if (search) dataSiswa = dataSiswa.filter(s => (s.nama || '').toLowerCase().includes(search));
-
-  if (dataSiswa.length === 0) {
-    showToast('Tidak ada data siswa yang dapat diekspor', 'error');
-    return;
-  }
-
-  const rows = dataSiswa.map((s, index) => ({
-    "No": index + 1,
-    "Nama Lengkap": s.nama || '-',
-    "NISN": s.nisn || '-',
-    "Kelas / Rombel": s.kelas || '-',
-    "Jenis Kelamin": s.jk === 'L' ? 'Laki-laki' : (s.jk === 'P' ? 'Perempuan' : s.jk),
-    "Status Siswa": s.statusSiswa || 'Reguler',
-    "Tanggal Masuk": s.tglMasuk || '-',
-    "Asal Sekolah": s.asalSekolah || '-',
-    "No. HP Orang Tua": s.hpOrangTua || '-'
-  }));
-
-  try {
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Siswa");
-
-    worksheet['!cols'] = [
-      { wch: 6 },  // No
-      { wch: 30 }, // Nama Lengkap
-      { wch: 16 }, // NISN
-      { wch: 15 }, // Kelas
-      { wch: 15 }, // JK
-      { wch: 16 }, // Status
-      { wch: 16 }, // Tanggal Masuk
-      { wch: 25 }, // Asal Sekolah
-      { wch: 22 }  // No. HP Ortu
-    ];
-
-    const labelKelas = kelas ? `_Kelas_${kelas.replace(/\s+/g, '_')}` : '_Semua_Kelas';
-    const timestamp = new Date().toISOString().slice(0, 10);
-    const namaFile = `Data_Siswa_SMKN_1_Mepanga${labelKelas}_${timestamp}.xlsx`;
-    
-    XLSX.writeFile(workbook, namaFile);
-    showToast('Data siswa berhasil diekspor ke Excel', 'success');
-    addAuditLog('Export Data Siswa ke Excel');
-  } catch (error) {
-    console.error(error);
-    showToast('Gagal mengekspor data: ' + error.message, 'error');
-  }
-}
 
     function renderAdminSekretaris() {
       const mc = document.getElementById('mainContent');
@@ -6738,11 +7203,9 @@ function unggahKreditPoinMassal(event) {
       }
     }
 
-    // ===================================================================
-    // KODE PERBAIKAN SINKRONISASI DASHBOARD, REKAP ADMIN, & SURAT CATATAN
-    // ===================================================================
-// 1. MEMPERBAIKI TAMPILAN DASHBOARD ADMIN (PREVIEW MUNCUL KEMBALI)
-// 1. MEMPERBAIKI TAMPILAN DASHBOARD ADMIN (BERSIH DARI TOMBOL RUSAK)
+// ===================================================================
+// KODE PERBAIKAN DASHBOARD (DENGAN PERHITUNGAN PENEBUSAN POIN / REMISI)
+// ===================================================================
 
 function renderDashboardKesiswaanBaru() {
       const mc = document.getElementById('mainContent');
@@ -6858,16 +7321,37 @@ function renderDashboardKesiswaanBaru() {
         // Hitung bobot poin absen: Alpa = 3 Poin, Izin = 1 Poin, Sakit = 0.5 Poin
         const poinKetidakhadiran = (alp * 3) + (izn * 1) + (skt * 0.5);
 
-        // TOTAL MERGE REAL-TIME
-        const totalPoinGabungan = poinTataTertib + poinKetidakhadiran;
+        // --- AMBIL DATA PENEBUSAN POIN / REMISI ---
+        let totalRemisiPoin = 0;
+
+        if (DB.penebusan_poin) {
+          DB.penebusan_poin.forEach(p => {
+            if (p && (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id))) {
+              totalRemisiPoin += (Number(p.poinPemulihan || p.poin || p.jumlahPoin) || 0);
+            }
+          });
+        }
+
+        if (DB.remisi) {
+          DB.remisi.forEach(r => {
+            if (r && (String(r.siswaId) === String(s.id) || String(r.idSiswa) === String(s.id))) {
+              totalRemisiPoin += (Number(r.poin || r.poinPemulihan) || 0);
+            }
+          });
+        }
+
+        // TOTAL MERGE REAL-TIME DENGAN POTONGAN REMISI
+        let totalPoinGabungan = (poinTataTertib + poinKetidakhadiran) - totalRemisiPoin;
+        if (totalPoinGabungan < 0) totalPoinGabungan = 0; // Poin tidak boleh minus
 
         s.poinPelanggaranDasar = poinTataTertib;
         s.poinAbsen = poinKetidakhadiran;
+        s.poinRemisi = totalRemisiPoin;
         s.poin = totalPoinGabungan;
 
         const namaDisplay = s.nama || s.name || 'Tanpa Nama';
 
-        // Alokasikan siswa ke box monitoring poin bagian atas
+        // Alokasikan siswa ke box monitoring poin bagian atas berdasarkan total poin BERSIH
         if (totalPoinGabungan >= 100) {
           p100.push({ nama: namaDisplay, kelas: s.kelas || '-', total: totalPoinGabungan });
         } else if (totalPoinGabungan >= 75) {
@@ -7017,7 +7501,7 @@ function renderDashboardKesiswaanBaru() {
              </div>
              <div>
                <h4 class="text-base font-bold text-gray-900 dark:text-white">Monitoring Ambang Batas Akumulasi Poin Pelanggaran</h4>
-               <p class="text-xs text-gray-400 dark:text-gray-500">Siswa dengan akumulasi poin tertinggi dari Tata Tertib & Absensi</p>
+               <p class="text-xs text-gray-400 dark:text-gray-500">Siswa dengan akumulasi poin bersih (Tata Tertib + Absensi - Remisi)</p>
              </div>
            </div>
         </div>
@@ -13232,26 +13716,36 @@ async function kirimNotifBimbinganKeBKManual() {
   }
 }
 
-// Helper untuk mengambil seluruh data bimbingan saat ini
+// ========================================================
+// 🔄 HELPER PERBAIKAN: HITUNG REKAP POIN PRESISI
+// Total Poin = (Poin Pelanggaran + Poin Ketidakhadiran) - Total Remisi / Pemulihan
+// ========================================================
 function dapatkanDataBimbinganSemua() {
   return (DB.siswa || []).map(s => {
-    let totalPelanggaran = 0, totalAbsen = 0, totalPenebusanKhusus = 0;
+    let totalPelanggaran = 0;
+    let totalAbsen = 0;
+    let totalRemisiPoin = 0;
 
+    // 1. HITUNG POIN PELANGGARAN
     if (DB.pelanggaran) {
       DB.pelanggaran.forEach(p => {
         if (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)) {
-          const tt = DB.tatatertib && DB.tatatertib.length > 0 ? DB.tatatertib.find(x => x.id == p.jenisId || x.kode == p.jenisId) : null;
+          const tt = DB.tatatertib && DB.tatatertib.length > 0 
+            ? DB.tatatertib.find(x => x.id == p.jenisId || x.kode == p.jenisId) 
+            : null;
           totalPelanggaran += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
         }
       });
     }
 
+    // 2. HITUNG POIN KETIDAKHADIRAN (ALPA: 3, IZIN: 1, SAKIT: 0.5)
     if (DB.kehadiran) {
       const logSiswa = DB.kehadiran.filter(k => 
         String(k.siswaId || '') === String(s.id) || 
         String(k.idSiswa || '') === String(s.id) ||
         (s.nisn && String(k.nisn || '') === String(s.nisn))
       );
+      
       let alpa = 0, izin = 0, sakit = 0;
       logSiswa.forEach(k => {
         const st = String(k.status || "").toUpperCase().trim();
@@ -13259,27 +13753,48 @@ function dapatkanDataBimbinganSemua() {
         else if (st === 'I' || st === 'IZIN') izin++;
         else if (st === 'S' || st === 'SAKIT') sakit++;
       });
+
       totalAbsen = (alpa * 3) + (izin * 1) + (sakit * 0.5);
     }
 
+    // 3. HITUNG TOTAL REMISI / PENEBUSAN POIN (PEMULIHAN)
+    // Memeriksa DB.penebusan_poin maupun DB.remisi
     if (DB.penebusan_poin) {
       DB.penebusan_poin.forEach(p => {
-        if (String(p.siswaId) === String(s.id)) totalPenebusanKhusus += (Number(p.poinPemulihan) || 0);
+        if (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)) {
+          totalRemisiPoin += (Number(p.poinPemulihan || p.poin || p.jumlahPoin) || 0);
+        }
       });
     }
 
-    let poinAktifMutlak = (totalPelanggaran + totalAbsen) - totalPenebusanKhusus;
+    if (DB.remisi) {
+      DB.remisi.forEach(r => {
+        if (String(r.siswaId) === String(s.id) || String(r.idSiswa) === String(s.id)) {
+          totalRemisiPoin += (Number(r.poin || r.poinPemulihan) || 0);
+        }
+      });
+    }
+
+    // 4. REKAP POIN AKHIR (Murni Pelanggaran + Absen - Remisi)
+    const kotorPoin = totalPelanggaran + totalAbsen;
+    let poinAktifMutlak = kotorPoin - totalRemisiPoin;
     if (poinAktifMutlak < 0) poinAktifMutlak = 0;
 
+    // 5. PENENTUAN STATUS BIMBINGAN / PENANGANAN
     const statusInfo = typeof dapatkanStatusBimbingan === 'function' ? dapatkanStatusBimbingan(poinAktifMutlak) : null;
-    const riwayatSelesai = (DB.riwayatTindakan || []).filter(r => String(r.siswaId) === String(s.id) && r.levelTeks === (statusInfo ? statusInfo.teks : ''));
+    const riwayatSelesai = (DB.riwayatTindakan || []).filter(r => 
+      String(r.siswaId) === String(s.id) && r.levelTeks === (statusInfo ? statusInfo.teks : '')
+    );
 
     return {
       idSiswa: s.id,
       nama: s.nama,
       kelas: s.kelas,
-      totalPoin: poinAktifMutlak,
-      sudahDitangani: riwayatSelesai.length > 0 || poinAktifMutlak < 15
+      poinPelanggaran: totalPelanggaran,
+      poinAbsen: totalAbsen,
+      poinRemisi: totalRemisiPoin,
+      totalPoin: poinAktifMutlak, // Poin bersih setelah remisi
+      sudahDitangani: riwayatSelesai.length > 0
     };
   });
 }
@@ -15027,6 +15542,531 @@ function formatTanggalIndonesia(tanggal){
         year:"numeric"
     });
 
+}
+
+// ==========================================
+// 1. DAFTAR SISWA (DATA INDUK)
+// ==========================================
+function renderDataIndukSiswa() {
+  const mc = document.getElementById('mainContent');
+  if (!mc) return;
+
+  const listSiswa = DB.siswa || [];
+
+  mc.innerHTML = `
+    <div class="fade-in p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <i data-lucide="book-open" class="w-5 h-5 text-blue-600"></i>
+            Data Induk Siswa
+          </h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Pilih siswa untuk melihat & mencetak Lembar Buku Induk Siswa.
+          </p>
+        </div>
+      </div>
+
+      <!-- Filter Pencarian & Kelas -->
+      <div class="flex flex-wrap gap-3 mb-6">
+        <input 
+          type="text" 
+          id="searchInduk" 
+          oninput="filterDataIndukSiswa()" 
+          placeholder="Cari berdasarkan nama atau NISN..." 
+          class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm flex-1 min-w-[200px]"
+        >
+        <select 
+          id="filterKelasInduk" 
+          onchange="filterDataIndukSiswa()" 
+          class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"
+        >
+          <option value="">Semua Kelas</option>
+          ${(DB.kelas || []).map(k => `<option value="${k}">${k}</option>`).join('')}
+        </select>
+      </div>
+
+      <!-- Tabel Daftar Siswa -->
+      <div class="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-700">
+        <table class="w-full text-left text-sm" id="tabelDataInduk">
+          <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 font-semibold border-b border-gray-100 dark:border-gray-700">
+            <tr>
+              <th class="p-3 text-center w-12">No</th>
+              <th class="p-3">Foto</th>
+              <th class="p-3">Nama Siswa</th>
+              <th class="p-3">NISN</th>
+              <th class="p-3">Kelas</th>
+              <th class="p-3 text-center">Status Data Penunjang</th>
+              <th class="p-3 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="bodyDataInduk" class="divide-y divide-gray-100 dark:divide-gray-700">
+            <!-- Rendered by filterDataIndukSiswa() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  filterDataIndukSiswa();
+}
+
+// Fungsi Filter & Render Tabel Data Induk
+function filterDataIndukSiswa() {
+  const search = (document.getElementById('searchInduk')?.value || '').toLowerCase().trim();
+  const kelas = document.getElementById('filterKelasInduk')?.value || '';
+  const body = document.getElementById('bodyDataInduk');
+
+  if (!body) return;
+
+  let list = [...(DB.siswa || [])];
+
+  if (kelas) {
+    list = list.filter(s => String(s.kelas || '').trim() === kelas.trim());
+  }
+
+  if (search) {
+    list = list.filter(s => 
+      String(s.nama || '').toLowerCase().includes(search) || 
+      String(s.nisn || '').toLowerCase().includes(search)
+    );
+  }
+
+  if (list.length === 0) {
+    body.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Data siswa tidak ditemukan.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map((s, idx) => {
+    // Relasi dengan DB.kelengkapanData berdasarkan siswaId
+    const kData = (DB.kelengkapanData || []).find(k => String(k.siswaId) === String(s.id)) || {};
+    const foto = kData.foto || s.pasFoto || '';
+    const lengkap = !!(kData.tempatLahir && kData.tanggalLahir && kData.alamat);
+
+    return `
+      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+        <td class="p-3 text-center font-mono text-xs">${idx + 1}</td>
+        <td class="p-3">
+          ${foto ? 
+            `<img src="${foto}" class="w-8 h-10 object-cover rounded border shadow-sm">` : 
+            `<div class="w-8 h-10 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-[10px] text-gray-400">No Img</div>`
+          }
+        </td>
+        <td class="p-3 font-medium text-gray-900 dark:text-white">${s.nama || '-'}</td>
+        <td class="p-3 font-mono text-xs">${s.nisn || '-'}</td>
+        <td class="p-3">${s.kelas || '-'}</td>
+        <td class="p-3 text-center">
+          ${lengkap ? 
+            `<span class="px-2.5 py-1 text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full">Lengkap</span>` : 
+            `<span class="px-2.5 py-1 text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full">Belum Lengkap</span>`
+          }
+        </td>
+        <td class="p-3 text-center">
+          <button 
+            onclick="previewBukuInduk('${s.id}')" 
+            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 mx-auto transition shadow-sm"
+          >
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i> Preview / Cetak
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ==========================================
+// 2. TAMPILAN PREVIEW & CETAK BUKU INDUK
+// ==========================================
+function previewBukuInduk(siswaId) {
+  const mc = document.getElementById('mainContent');
+  if (!mc) return;
+
+  // 1. Data Utama (dari DB.siswa)
+  const siswa = (DB.siswa || []).find(s => String(s.id) === String(siswaId)) || {};
+
+  // 2. Data Penunjang (dari DB.kelengkapanData)
+  const kData = (DB.kelengkapanData || []).find(k => String(k.siswaId) === String(siswaId)) || {};
+
+  // Data Sekolah (Default ke SMK Negeri 1 Mepanga)
+  const namaSekolah = (DB.identitasSekolah && DB.identitasSekolah.namaSekolah) 
+    ? DB.identitasSekolah.namaSekolah 
+    : 'SMK Negeri 1 Mepanga';
+
+  // Cek Status Pindahan
+  const isPindahan = siswa.statusSiswa === 'Pindahan' || !!siswa.tglMasuk;
+
+  // Helper pengisi titik-titik jika data kosong (Dibuat lebih panjang agar memenuhi lebar kertas)
+  const f = (val) => (val && String(val).trim() !== '') ? val : '....................................................................................................................';
+
+  // Foto siswa (Pojok Kanan Atas)
+  const fotoSrc = kData.foto || siswa.pasFoto || '';
+
+  mc.innerHTML = `
+    <!-- ATURAN CSS PRINT UTAMA UNTUK KERTAS F4 -->
+    <style>
+      @media print {
+        @page {
+          size: 215.9mm 330mm; /* Kertas F4 / Folio */
+          margin: 12mm 15mm 12mm 15mm; /* Margin ideal cetakan */
+        }
+        html, body {
+          background-color: white !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .print\\:hidden {
+          display: none !important;
+        }
+        #printArea {
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          font-size: 11.5px !important; /* Ukuran font pas & proporsional */
+          line-height: 1.35 !important;
+        }
+        tr {
+          page-break-inside: avoid;
+        }
+      }
+    </style>
+
+    <!-- Tombol Operasional (Disembunyikan saat cetak) -->
+    <div class="mb-6 flex items-center justify-between print:hidden">
+      <button 
+        onclick="renderDataIndukSiswa()" 
+        class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-gray-300 transition"
+      >
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali
+      </button>
+
+      <button 
+        onclick="window.print()" 
+        class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 shadow-md transition"
+      >
+        <i data-lucide="printer" class="w-4 h-4"></i> Cetak Dokumen (F4)
+      </button>
+    </div>
+
+    <!-- AREA DOKUMEN BUKU INDUK -->
+    <div id="printArea" class="bg-white text-black p-8 max-w-4xl mx-auto border shadow-sm font-serif text-[12px] leading-normal relative">
+      
+      <!-- 1. Lencana Keterangan PINDAHAN (Pojok Kiri Atas) -->
+      ${isPindahan ? `
+        <div class="absolute top-4 left-6 border-2 border-black font-sans font-bold text-xs px-3 py-1 uppercase tracking-widest bg-gray-100">
+          PINDAHAN
+        </div>
+      ` : ''}
+
+      <!-- 2. Pas Foto Siswa (Digeser ke kiri: right-8) -->
+      <div class="absolute top-2 right-8 w-24 h-32 border border-black flex items-center justify-center p-0.5 bg-white">
+        ${fotoSrc ? `
+          <img src="${fotoSrc}" class="w-full h-full object-cover">
+        ` : `
+          <span class="text-[10px] text-gray-400 text-center font-sans">Pas Foto<br>3 x 4</span>
+        `}
+      </div>
+
+      <!-- TITLE DOKUMEN -->
+      <div class="text-center font-bold text-base mb-6 uppercase tracking-wider pt-2">
+        LEMBAR BUKU INDUK SISWA
+      </div>
+
+      <!-- MASTER TABLE: Titik Dua Tegak Lurus + Mengetat Penuh ke Sisi Kanan -->
+      <table class="w-full border-collapse text-left">
+        <colgroup>
+          <col style="width: 280px;">
+          <col style="width: 20px;">
+          <col style="width: auto;">
+        </colgroup>
+        <tbody>
+          <!-- HEADER ATAS -->
+          <tr>
+            <td class="font-semibold py-0.5">Nama Siswa</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="font-bold uppercase py-0.5">${f(siswa.nama)}</td>
+          </tr>
+          <tr>
+            <td class="font-semibold py-0.5">Nomor Induk Siswa (Nasional)</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.nisn)}</td>
+          </tr>
+          <tr>
+            <td class="font-semibold py-0.5">Sekolah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${namaSekolah}</td>
+          </tr>
+
+          <!-- A. KETERANGAN TENTANG DIRI SISWA -->
+          <tr>
+            <td colspan="3" class="font-bold pt-3 pb-0.5">A. KETERANGAN TENTANG DIRI SISWA</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">1. Nama Siswa</td>
+            <td class="text-center py-0.5"></td>
+            <td class="py-0.5"></td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">a. Nama Lengkap</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.nama)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">b. Nama Panggilan/Sapaan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.namaPanggilan)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">2. Jenis Kelamin</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${siswa.jk === 'L' ? 'Laki-laki' : (siswa.jk === 'P' ? 'Perempuan' : f(''))}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">3. Tempat/Tanggal Lahir</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${(kData.tempatLahir || siswa.tempatLahir) ? `${kData.tempatLahir || siswa.tempatLahir}, ${kData.tanggalLahir || siswa.tanggalLahir || ''}` : f('')}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">4. Agama</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.agama)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">5. Kewarganegaraan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.kewarganegaraan || 'Indonesia')}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">6. Anak Ke-</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.anakKe)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">7. Jumlah Saudara Kandung</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.jmlKandung)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">8. Jumlah Saudara Tiri</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.jmlTiri)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">9. Jumlah Saudara Angkat</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.jmlAngkat)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">10. Anak Yatim/Piatu/Yatim Piatu</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.statusAnak)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">11. Bahasa Sehari-hari di Rumah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.bahasa)}</td>
+          </tr>
+
+          <!-- B. KETERANGAN TEMPAT TINGGAL -->
+          <tr>
+            <td colspan="3" class="font-bold pt-3 pb-0.5">B. KETERANGAN TEMPAT TINGGAL</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">12. Alamat</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.alamat || siswa.alamat)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">13. Nomor Telp / HP</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.hpOrangTua || kData.hp)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">14. Tinggal dengan Orang Tua/Saudara/di Asrama/Kost</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.tinggalDengan)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">15. Jarak Tempat Tinggal ke Sekolah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.jarakSekolah)}</td>
+          </tr>
+
+          <!-- C. KETERANGAN KESEHATAN -->
+          <tr>
+            <td colspan="3" class="font-bold pt-3 pb-0.5">C. KETERANGAN KESEHATAN</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">16. Golongan Darah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.golDarah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">17. Penyakit yang Pernah Diderita</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.penyakit)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">18. Kelainan Jasmani</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.kelainanJasmani)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">19. Tinggi Badan / Berat Badan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${(kData.tinggiBadan || kData.beratBadan) ? `${kData.tinggiBadan || '-'} Cm / ${kData.beratBadan || '-'} Kg` : f('')}</td>
+          </tr>
+
+          <!-- D. KETERANGAN PENDIDIKAN -->
+          <tr>
+            <td colspan="3" class="font-bold pt-3 pb-0.5">D. KETERANGAN PENDIDIKAN</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">20. Pendidikan Sebelumnya</td>
+            <td class="text-center py-0.5"></td>
+            <td class="py-0.5"></td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">a. Lulus dari</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.asalSekolah || kData.smpAsal)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">b. Tanggal dan No. STTB</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.noSttb)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">c. Lamanya Belajar</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.lamaBelajarSmp)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5">21. Diterima di Sekolah ini</td>
+            <td class="text-center py-0.5"></td>
+            <td class="py-0.5"></td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">a. Di Kelas / Jurusan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.kelas)} / ${f(siswa.jurusan || kData.jurusan)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">b. Tanggal Diterima</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(siswa.tglMasuk || kData.tglDiterima)}</td>
+          </tr>
+
+          <!-- E. KETERANGAN TENTANG ORANG TUA KANDUNG -->
+          <tr>
+            <td colspan="3" class="font-bold pt-3 pb-0.5">E. KETERANGAN TENTANG ORANG TUA KANDUNG</td>
+          </tr>
+          
+          <!-- Ayah Kandung -->
+          <tr>
+            <td class="py-0.5 font-semibold">22. Ayah Kandung</td>
+            <td class="text-center py-0.5"></td>
+            <td class="py-0.5"></td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">a. Nama Lengkap</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.namaAyah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">b. Agama</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.agamaAyah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">c. Pekerjaan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.pekerjaanAyah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">d. Nomor Telp / HP</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.hpAyah || siswa.hpOrangTua)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">e. Alamat Rumah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.alamatAyah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">f. Penghasilan per Bulan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.penghasilanAyah)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">g. Masih Hidup / Meninggal</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.statusAyah)}</td>
+          </tr>
+
+          <!-- Ibu Kandung -->
+          <tr>
+            <td class="py-0.5 font-semibold pt-1.5">23. Ibu Kandung</td>
+            <td class="text-center py-0.5"></td>
+            <td class="py-0.5"></td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">a. Nama Lengkap</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.namaIbu)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">b. Agama</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.agamaIbu)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">c. Pekerjaan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.pekerjaanIbu)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">d. Nomor Telp / HP</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.hpIbu || siswa.hpOrangTua)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">e. Alamat Rumah</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.alamatIbu)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">f. Penghasilan per Bulan</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.penghasilanIbu)}</td>
+          </tr>
+          <tr>
+            <td class="py-0.5 pl-5">g. Masih Hidup / Meninggal</td>
+            <td class="text-center py-0.5">:</td>
+            <td class="py-0.5">${f(kData.statusIbu)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- TANDA TANGAN KEPALA SEKOLAH (Digeser ke kiri dengan pr-8 / mr-4) -->
+      <div class="flex justify-end items-end mt-8 pt-2 pr-8">
+        <div class="text-center w-60">
+          <p>Mepanga, .................................... 20...</p>
+          <p class="mb-14">Kepala Sekolah,</p>
+          <p class="font-bold underline">${(DB.identitasSekolah && DB.identitasSekolah.kepalaSekolah) || '................................................'}</p>
+          <p class="text-[10px]">NIP. ${(DB.identitasSekolah && DB.identitasSekolah.nipKepalaSekolah) || '........................................'}</p>
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
   </script>
 
