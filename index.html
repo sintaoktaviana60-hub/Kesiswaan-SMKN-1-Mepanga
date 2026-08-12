@@ -347,9 +347,11 @@ const FirebaseState = {
     bimbingan: false,
     kelengkapanData: false,
     libur: false, // 🟢 2. TAMBAHKAN DI SINI
+    jadwalKesiswaan: false, // ➕ Tambahkan ini
+    catatanKesiswaan: false,  // ➕ Tambahkan ini
     identitas: false,
     auditLog: false
-  }
+    }
 
 };
 
@@ -411,7 +413,12 @@ FirebaseService.simpanKelengkapanData = function () { return this.saveNode("kele
 
 // 🟢 3. TAMBAHKAN FUNGSI SIMPAN LIBUR INI
 FirebaseService.simpanLibur = function () { return this.saveNode("libur", DB.libur); };
-
+FirebaseService.simpanJadwalKesiswaan = function () { 
+  return this.saveNode("jadwalKesiswaan", DB.jadwalKesiswaan); 
+};
+FirebaseService.simpanCatatanKesiswaan = function () { 
+  return this.saveNode("catatanKesiswaan", DB.catatanKesiswaan); 
+};
 FirebaseService.tambahRecord = async function (node, data) {
     if (!FirebaseState.ready) throw new Error("Firebase belum siap.");
     const ref = getNode(node).push();
@@ -12178,14 +12185,45 @@ function renderHalamanStatistikKehadiran() {
 
 // A. TAMBAH JADWAL KE FIREBASE
 // A. TAMBAH JADWAL
+async function simpanDataKeStorage(key) {
+  try {
+    // 1. Simpan ke LocalStorage sebagai backup/cache lokal
+    if (DB && DB[key] !== undefined) {
+      localStorage.setItem(key, JSON.stringify(DB[key]));
+    }
+
+    // 2. Kirim/Sinkronkan ke Cloud Firebase jika FirebaseService tersedia
+    if (typeof FirebaseService !== 'undefined') {
+      if (key === 'jadwalKesiswaan' && typeof FirebaseService.simpanJadwalKesiswaan === 'function') {
+        await FirebaseService.simpanJadwalKesiswaan();
+      } else if (key === 'catatanKesiswaan' && typeof FirebaseService.simpanCatatanKesiswaan === 'function') {
+        await FirebaseService.simpanCatatanKesiswaan();
+      } else if (typeof FirebaseService.saveNode === 'function') {
+        // Fallback jika menggunakan handler generic saveNode
+        await FirebaseService.saveNode(key, DB[key]);
+      }
+    }
+
+    return true; // Mengembalikan true jika berhasil
+  } catch (error) {
+    console.error(`Gagal menyimpan data ${key}:`, error);
+    return false; // Mengembalikan false jika gagal (agar toast error muncul)
+  }
+}
+
 async function tambahJadwalKesiswaan(event) {
-  event.preventDefault();
+  if (event) event.preventDefault(); // Mencegah reload halaman
+
+  console.log("1. Proses simpan dimulai...");
 
   const tgl = document.getElementById('inputTglJadwal')?.value;
   const nama = document.getElementById('inputNamaJadwal')?.value.trim();
   const status = document.getElementById('inputStatusJadwal')?.value;
 
-  if (!tgl || !nama) return;
+  if (!tgl || !nama) {
+    tampilkanNotifikasi('Tanggal dan Nama Agenda wajib diisi!', 'error');
+    return;
+  }
 
   const newJadwal = {
     id: 'JDW_' + Date.now(),
@@ -12198,15 +12236,78 @@ async function tambahJadwalKesiswaan(event) {
   if (!Array.isArray(DB.jadwalKesiswaan)) DB.jadwalKesiswaan = [];
   DB.jadwalKesiswaan.push(newJadwal);
 
-  const berhasil = await simpanDataKeStorage('jadwalKesiswaan');
+  console.log("2. Menjalankan simpanDataKeStorage...");
+  
+  let berhasil = false;
+  try {
+    berhasil = await simpanDataKeStorage('jadwalKesiswaan');
+  } catch (err) {
+    console.error("Error pada simpanDataKeStorage:", err);
+  }
+
+  console.log("3. Hasil simpan:", berhasil);
 
   if (berhasil) {
     document.getElementById('formJadwalKesiswaan')?.reset();
-    if (typeof showToast === 'function') showToast('Agenda berhasil disimpan ke Firebase!', 'success');
+    tampilkanNotifikasi('Agenda berhasil disimpan!', 'success');
     renderJadwalKesiswaan();
   } else {
-    if (typeof showToast === 'function') showToast('Gagal menyimpan ke Firebase', 'error');
+    tampilkanNotifikasi('Gagal menyimpan agenda!', 'error');
   }
+}
+
+function tampilkanNotifikasi(pesan, tipe = 'info') {
+  // 1. Jika ada fungsi showToast bawaan project yang berjalan, pakai itu
+  if (typeof showToast === 'function') {
+    try {
+      showToast(pesan, tipe);
+      return;
+    } catch (e) {
+      console.warn("showToast bawaan error, beralih ke UI bawaan:", e);
+    }
+  }
+
+  // 2. Jika tidak ada, buat Toast UI Melayang Otomatis
+  let container = document.getElementById('custom-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'custom-toast-container';
+    container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  const bgColor = tipe === 'error' ? '#ef4444' : (tipe === 'success' ? '#10b981' : '#3b82f6');
+
+  toast.style.cssText = `
+    background-color: ${bgColor};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    font-weight: 600;
+    font-size: 14px;
+    font-family: sans-serif;
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: auto;
+  `;
+  toast.innerText = pesan;
+  container.appendChild(toast);
+
+  // Animasi Muncul
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  });
+
+  // Hilang Otomatis setelah 3 detik
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // B. RENDER KALENDER (Mengambil dari state DB lokal yang tersinkron)
