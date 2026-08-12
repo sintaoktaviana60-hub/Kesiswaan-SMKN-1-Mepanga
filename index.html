@@ -302,7 +302,9 @@ let DB = {
   // Persiapan fitur baru
   bimbingan: [],
   kelengkapanData: [],
-  libur: [], // 🟢 1. TAMBAHKAN DI SINI
+  libur: [],
+  jadwalKesiswaan: [],  // 🟢 Tambahkan di sini (Array untuk menyimpan list agenda)
+  catatanKesiswaan: {}, // 🟢 Tambahkan di sini (Objek untuk menyimpan catatan per bulan)
 
   identitas: {
     namaSekolah: 'SMKN 1 Mepanga',
@@ -577,7 +579,9 @@ async function simpanDataKeStorage(node) {
     kelengkapanData: DB.kelengkapanData,
     auditLog: DB.auditLog,
     identitas: DB.identitas,
-    libur: DB.libur // 🟢 TAMBAHKAN BARIS INI
+    libur: DB.libur,
+    jadwalKesiswaan: DB.jadwalKesiswaan, // 🟢 TAMBAHKAN
+    catatanKesiswaan: DB.catatanKesiswaan  // 🟢 TAMBAHKAN
   };
 
   if (!(node in dataNode)) {
@@ -9704,7 +9708,7 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
     // 1. HITUNG POIN TATA TERTIB
     if (DB.pelanggaran) {
       DB.pelanggaran.forEach(p => {
-        if (String(p.siswaId) === String(s.id) || String(p.idSiswa) === String(s.id)) {
+        if (String(p.siswaId || p.idSiswa) === String(s.id)) {
           const tt = DB.tatatertib && DB.tatatertib.length > 0 ? DB.tatatertib.find(x => x.id == p.jenisId || x.kode == p.jenisId) : null;
           totalPelanggaran += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
         }
@@ -9714,8 +9718,7 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
     // 2. HITUNG POIN KETIDAKHADIRAN
     if (DB.kehadiran) {
       const logSiswa = DB.kehadiran.filter(k => 
-        String(k.siswaId || '') === String(s.id) || 
-        String(k.idSiswa || '') === String(s.id) ||
+        String(k.siswaId || k.idSiswa || '') === String(s.id) ||
         (s.nisn && String(k.nisn || '') === String(s.nisn))
       );
       
@@ -9731,14 +9734,17 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       totalAbsen = (alpa * 3) + (izin * 1) + (sakit * 0.5);
     }
 
-    // 3. HITUNG POIN PENEBUSAN/REMISI
-    if (DB.penebusan_poin) {
-      DB.penebusan_poin.forEach(p => {
-        if (String(p.siswaId) === String(s.id)) {
-          totalPenebusanKhusus += (Number(p.poinPemulihan) || 0);
-        }
-      });
-    }
+    // 3. HITUNG POIN PENEBUSAN/REMISI (✅ FIX NAMING DB: mendukung penebusanPoin maupun penebusan_poin)
+    const sourcePenebusan = DB.penebusanPoin || DB.penebusan_poin || [];
+    const listPenebusanArray = Array.isArray(sourcePenebusan) 
+      ? sourcePenebusan 
+      : Object.keys(sourcePenebusan).map(k => ({ idPenebusan: k, ...sourcePenebusan[k] }));
+
+    listPenebusanArray.forEach(p => {
+      if (String(p.siswaId || p.idSiswa) === String(s.id)) {
+        totalPenebusanKhusus += (Number(p.poinPemulihan || p.poin) || 0);
+      }
+    });
     
     // 4. FORMULA SINKRON POIN AKTIF
     let poinAktifMutlak = (totalPelanggaran + totalAbsen) - totalPenebusanKhusus;
@@ -9772,7 +9778,6 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
     };
   }).filter(Boolean);
 
-
   // FILTER BERDASARKAN HAK AKSES GURU
   if (userRole === 'walas') {
     listBimbingan = listBimbingan.filter(d => 
@@ -9787,12 +9792,10 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
     }
   }
 
-  // Sisa kode render HTML ke bawah tetap sama...
-
   // URUTKAN DARI POIN TERTINGGI KE TERENDAH
   listBimbingan.sort((a, b) => b.totalPoin - a.totalPoin);
 
-mc.innerHTML = `
+  mc.innerHTML = `
     <div class="fade-in space-y-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
         <div>
@@ -9801,7 +9804,6 @@ mc.innerHTML = `
         </div>
         
         <div class="flex flex-wrap items-center gap-2 self-end md:self-center">
-          <!-- 🔥 TOMBOL WA KHUSUS ADMIN / WAKASIS DISISIPKAN DI SINI -->
           ${(userRole === 'admin' || userRole === 'wakasis') ? `
             <button 
               onclick="kirimNotifBimbinganKeWalasManual()" 
@@ -9811,8 +9813,8 @@ mc.innerHTML = `
               <span>📲 Kirim WA ke Walas</span>
             </button>
             <button onclick="kirimNotifBimbinganKeBKManual()" class="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5">
-  💬 Notif WA Guru BK
-</button>
+              💬 Notif WA Guru BK
+            </button>
           ` : ''}
 
           ${(userRole === 'wakasis' || userRole === 'admin') ? `
@@ -9976,26 +9978,35 @@ mc.innerHTML = `
         </div>
         <input type="hidden" id="mpSiswaId">
         <div class="space-y-3.5 text-sm">
-          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Nama Siswa</label><input id="mpNama" readonly class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 font-semibold text-xs text-gray-800"></div>
-          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Tanggal Penyelesaian</label><input type="date" id="mpTanggal" class="w-full px-3 py-2 border rounded-xl text-xs text-gray-900"></div>
+          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Nama Siswa</label><input id="mpNama" readonly class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 font-semibold text-xs text-gray-800 dark:text-gray-200"></div>
+          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Tanggal Penyelesaian</label><input type="date" id="mpTanggal" class="w-full px-3 py-2 border rounded-xl text-xs text-gray-900 dark:bg-gray-700 dark:text-white"></div>
           <div>
-            <label class="block font-semibold text-xs text-gray-600 mb-1">Bentuk Sanksi Pemulihan</label>
-            <select id="mpSelectAturan" onchange="updatePoinOtomatis(this.value)" class="w-full px-3 py-2 border rounded-xl bg-white text-xs">
+            <label class="block font-semibold text-xs text-gray-600 dark:text-gray-300 mb-1">Bentuk Sanksi Pemulihan</label>
+            <select id="mpSelectAturan" onchange="updatePoinOtomatis(this.value)" class="w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 dark:text-white text-xs">
               <option value="">-- Pilih Jenis Tindakan Pemulihan --</option>
               ${(typeof ATURAN_PENEBUSAN !== 'undefined' ? ATURAN_PENEBUSAN : []).map(p => `<option value="${p.id}">${p.nama} (+${p.poin} Poin)</option>`).join('')}
               <option value="KUSTOM">-- Input Tindakan Kustom Manual --</option>
             </select>
           </div>
-          <div id="mpWrapperKustom" class="hidden"><label class="block font-semibold text-xs text-gray-500 mb-1">Uraian Tindakan Kustom</label><input id="mpTindakanKustom" placeholder="Tulis sanksi kustom..." class="w-full px-3 py-2 border rounded-xl text-xs"></div>
-          <div><label class="block font-semibold text-xs text-gray-600 mb-1">Nilai Kredit Poin Pemulihan</label><input id="mpPoin" type="number" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 font-bold text-green-600 text-sm"></div>
-          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Catatan Tambahan Konselor</label><textarea id="mpCatatan" rows="2" class="w-full px-3 py-2 border rounded-xl text-xs"></textarea></div>
-          <div class="p-3 bg-blue-50/50 border border-blue-100 rounded-xl flex items-start gap-2">
+          <div id="mpWrapperKustom" class="hidden"><label class="block font-semibold text-xs text-gray-500 mb-1">Uraian Tindakan Kustom</label><input id="mpTindakanKustom" placeholder="Tulis sanksi kustom..." class="w-full px-3 py-2 border rounded-xl text-xs dark:bg-gray-700 dark:text-white"></div>
+          <div><label class="block font-semibold text-xs text-gray-600 dark:text-gray-300 mb-1">Nilai Kredit Poin Pemulihan</label><input id="mpPoin" type="number" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-700 font-bold text-green-600 text-sm"></div>
+          <div><label class="block font-semibold text-xs text-gray-500 mb-1">Catatan Tambahan Konselor</label><textarea id="mpCatatan" rows="2" class="w-full px-3 py-2 border rounded-xl text-xs dark:bg-gray-700 dark:text-white"></textarea></div>
+          <div class="p-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl flex items-start gap-2">
             <input type="checkbox" id="mpKonfirmasi" class="mt-0.5 rounded border-gray-300 text-blue-600 cursor-pointer">
-            <label for="mpKonfirmasi" class="font-bold text-xs text-gray-800 cursor-pointer">Konfirmasi Otoritas Pemeriksa</label>
+            <label for="mpKonfirmasi" class="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer">Konfirmasi Otoritas Pemeriksa</label>
           </div>
         </div>
-        <div class="mt-5 pt-3 border-t border-gray-100 flex gap-3 justify-end">
-          <button onclick="tutupModalPenebusan()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-medium cursor-pointer">Batal</button>
+
+        <!-- 🔴 WADAH RIWAYAT PENEBUSAN -->
+        <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+          <h5 class="font-bold text-xs text-gray-700 dark:text-gray-300 mb-2">Riwayat Pemulihan Siswa Ini:</h5>
+          <div id="mpListRiwayat" class="max-h-36 overflow-y-auto space-y-2 text-xs">
+            <!-- Diisi otomatis oleh JavaScript -->
+          </div>
+        </div>
+
+        <div class="mt-5 pt-3 border-t border-gray-100 dark:border-gray-700 flex gap-3 justify-end">
+          <button onclick="tutupModalPenebusan()" class="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-xl text-xs font-medium cursor-pointer">Batal</button>
           <button onclick="eksekusiSimpanPenebusanBaru()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold cursor-pointer">Simpan & Kurangi Poin</button>
         </div>
       </div>
@@ -10010,8 +10021,9 @@ mc.innerHTML = `
 }
 
 // ===================================================================
-// 🟢 3. FUNGSI LOGIKA MODAL (Pastikan tidak ada fungsi ganda di bawah ini)
+// 🟢 FUNGSI LOGIKA MODAL & HAPUS
 // ===================================================================
+
 function bukaModalPenebusan(idSiswa, nama) {
   document.getElementById('mpSiswaId').value = idSiswa;
   document.getElementById('mpNama').value = nama;
@@ -10021,11 +10033,110 @@ function bukaModalPenebusan(idSiswa, nama) {
   document.getElementById('mpKonfirmasi').checked = false;
   document.getElementById('mpWrapperKustom').classList.add('hidden');
   document.getElementById('mpTindakanKustom').value = "";
+  
   const inputTgl = document.getElementById('mpTanggal');
   if (inputTgl) inputTgl.value = new Date().toISOString().split('T')[0];
-  
-  // Tampilkan modal
+
+  renderRiwayatModalPenebusan(idSiswa);
   document.getElementById('modalPenebusanPoinKesiswaan').classList.remove('hidden');
+}
+
+function renderRiwayatModalPenebusan(idSiswa) {
+  const container = document.getElementById('mpListRiwayat');
+  if (!container) return;
+
+  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
+
+  // 1. Ambil data penebusan (Mendukung penebusanPoin maupun penebusan_poin, Format Array maupun Object)
+  let rawData = [];
+  if (typeof DB !== 'undefined') {
+    rawData = DB.penebusanPoin || DB.penebusan_poin || [];
+  }
+
+  let dataPenebusan = [];
+  if (Array.isArray(rawData)) {
+    dataPenebusan = rawData;
+  } else if (typeof rawData === 'object' && rawData !== null) {
+    dataPenebusan = Object.keys(rawData).map(key => ({
+      idPenebusan: key,
+      ...rawData[key]
+    }));
+  }
+
+  // 2. Filter berdasarkan idSiswa atau siswaId
+  const listData = dataPenebusan.filter(p => {
+    const targetId = p.idSiswa || p.siswaId;
+    return String(targetId) === String(idSiswa);
+  });
+
+  if (listData.length === 0) {
+    container.innerHTML = `<p class="text-gray-400 italic text-[11px]">Belum ada riwayat pemulihan poin sebelumnya.</p>`;
+    return;
+  }
+
+  // 3. Render list riwayat
+  container.innerHTML = listData.map(p => {
+    const keyPenebusan = p.idPenebusan || p.id || '';
+    const namaTindakan = p.tindakanMendidik || p.tindakan || p.namaTindakan || 'Pemulihan Poin';
+    const poin = p.poinPemulihan || p.poin || 0;
+    const tanggal = p.tanggalPemulihan || p.tanggal || '-';
+
+    return `
+      <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+        <div>
+          <div class="font-semibold text-gray-800 dark:text-gray-200 text-xs">${namaTindakan}</div>
+          <div class="text-[10px] text-gray-400">📅 ${tanggal} | <span class="text-green-600 font-bold">+${poin} Poin</span></div>
+        </div>
+        ${userRole === 'admin' ? `
+          <button type="button" onclick="hapusPenebusanPoin('${keyPenebusan}', '${idSiswa}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold transition">
+            🗑️ Hapus
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function hapusPenebusanPoin(idPenebusan, idSiswa) {
+  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
+  if (userRole !== 'admin') {
+    alert('⚠️ Akses Ditolak! Hanya Admin yang dapat menghapus riwayat penebusan.');
+    return;
+  }
+
+  if (!confirm('Apakah Anda yakin ingin menghapus data pemulihan poin ini? Poin siswa akan disesuaikan kembali.')) return;
+
+  try {
+    // 1. Hapus dari Firebase Realtime Database
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      await firebase.database().ref(`kesiswaan_cloud/penebusan_poin/${idPenebusan}`).remove();
+    }
+
+    // 2. Hapus dari memori lokal (DB.penebusanPoin & DB.penebusan_poin)
+    if (typeof DB !== 'undefined') {
+      if (Array.isArray(DB.penebusanPoin)) {
+        DB.penebusanPoin = DB.penebusanPoin.filter(p => (p.idPenebusan || p.id) !== idPenebusan);
+        localStorage.setItem('sik_penebusan_poin', JSON.stringify(DB.penebusanPoin));
+      } else if (typeof DB.penebusanPoin === 'object') {
+        delete DB.penebusanPoin[idPenebusan];
+      }
+
+      if (Array.isArray(DB.penebusan_poin)) {
+        DB.penebusan_poin = DB.penebusan_poin.filter(p => (p.idPenebusan || p.id) !== idPenebusan);
+      } else if (typeof DB.penebusan_poin === 'object') {
+        delete DB.penebusan_poin[idPenebusan];
+      }
+    }
+
+    alert('Data penebusan poin berhasil dihapus!');
+
+    // 3. Refresh tampilan
+    renderRiwayatModalPenebusan(idSiswa);
+    if (typeof renderBimbinganKesiswaan === 'function') renderBimbinganKesiswaan();
+
+  } catch (err) {
+    alert('Gagal menghapus data: ' + err.message);
+  }
 }
 
 function updatePoinOtomatis(idAturan) {
@@ -10072,6 +10183,56 @@ function eksekusiSimpanPenebusanBaru() {
 function tutupModalPenebusan() {
   document.getElementById('modalPenebusanPoinKesiswaan').classList.add('hidden');
 }
+
+// D. Fungsi Hapus Penebusan Poin (KHUSUS ADMIN)
+async function hapusPenebusanPoin(idPenebusan) {
+  // 1. Validasi Hak Akses Admin
+  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
+  
+  if (userRole !== 'admin') {
+    alert('⚠️ Akses Ditolak! Hanya Admin yang berhak menghapus riwayat penebusan poin.');
+    return;
+  }
+
+  if (!idPenebusan) {
+    alert('ID data penebusan tidak ditemukan!');
+    return;
+  }
+
+  // 2. Konfirmasi Tindakan
+  const konfirmasi = confirm("Apakah Anda yakin ingin menghapus data penebusan poin ini? Data yang dihapus tidak dapat dikembalikan.");
+  if (!konfirmasi) return;
+
+  try {
+    // 3. Hapus Data dari Firebase Cloud
+    await firebase.database().ref(`kesiswaan_cloud/penebusan_poin/${idPenebusan}`).remove();
+
+    // 4. Update Memory Local (DB) jika ada
+    if (typeof DB !== 'undefined' && DB.penebusanPoin) {
+      DB.penebusanPoin = DB.penebusanPoin.filter(p => p.idPenebusan !== idPenebusan);
+      localStorage.setItem('sik_penebusan_poin', JSON.stringify(DB.penebusanPoin));
+    }
+
+    // 5. Umpan Balik (Toast / Alert)
+    if (typeof showToast === 'function') {
+      showToast('Data penebusan poin berhasil dihapus oleh Admin!', 'success');
+    } else {
+      alert('Sukses! Data penebusan poin berhasil dihapus.');
+    }
+
+    // 6. Re-render UI Tabel Penebusan / Bimbingan
+    if (typeof renderPenebusanPoin === 'function') {
+      renderPenebusanPoin();
+    } else if (typeof renderBimbinganKesiswaan === 'function') {
+      renderBimbinganKesiswaan();
+    }
+
+  } catch (err) {
+    console.error('Gagal menghapus penebusan poin:', err);
+    alert('Terjadi kesalahan saat menghapus data: ' + err.message);
+  }
+}
+
     // ====================================================
     // PERBAIKAN LANGKAH 4: FUNGSI OPERASIONAL MODAL, PENYIMPANAN DATA & CETAK SURAT DINAS
     // ====================================================
@@ -12007,6 +12168,7 @@ function renderHalamanStatistikKehadiran() {
 // ==========================================
 
 // A. TAMBAH JADWAL KE FIREBASE
+// A. TAMBAH JADWAL
 async function tambahJadwalKesiswaan(event) {
   event.preventDefault();
 
@@ -12017,30 +12179,28 @@ async function tambahJadwalKesiswaan(event) {
   if (!tgl || !nama) return;
 
   const newJadwal = {
+    id: 'JDW_' + Date.now(),
     tanggal: tgl,
     namaKegiatan: nama,
     status: status,
     createdAt: new Date().toISOString()
   };
 
-  try {
-    if (typeof firebase !== 'undefined' && firebase.database) {
-      await firebase.database().ref('jadwalKesiswaan').push(newJadwal);
-    } else if (typeof db !== 'undefined') {
-      await db.collection('jadwalKesiswaan').add(newJadwal);
-    }
+  if (!Array.isArray(DB.jadwalKesiswaan)) DB.jadwalKesiswaan = [];
+  DB.jadwalKesiswaan.push(newJadwal);
 
+  const berhasil = await simpanDataKeStorage('jadwalKesiswaan');
+
+  if (berhasil) {
     document.getElementById('formJadwalKesiswaan')?.reset();
     if (typeof showToast === 'function') showToast('Agenda berhasil disimpan ke Firebase!', 'success');
-
     renderJadwalKesiswaan();
-  } catch (error) {
-    console.error('Gagal menyimpan jadwal ke Firebase:', error);
+  } else {
     if (typeof showToast === 'function') showToast('Gagal menyimpan ke Firebase', 'error');
   }
 }
 
-// B. AMBIL DATA DARI FIREBASE & RENDER KALENDER
+// B. RENDER KALENDER (Mengambil dari state DB lokal yang tersinkron)
 async function renderJadwalKesiswaan() {
   const filterTahun = document.getElementById('filterTahunJadwal')?.value || new Date().getFullYear();
   const filterBulan = document.getElementById('filterBulanJadwal')?.value || (new Date().getMonth() + 1);
@@ -12053,24 +12213,10 @@ async function renderJadwalKesiswaan() {
   if (document.getElementById('displayTglAwal')) document.getElementById('displayTglAwal').innerText = `1/${filterBulan}/${filterTahun}`;
   if (document.getElementById('displayTglAkhir')) document.getElementById('displayTglAkhir').innerText = `${tglAkhirBulan}/${filterBulan}/${filterTahun}`;
 
-  // Ambil Data Jadwal dari Firebase
-  let listJadwal = [];
-  try {
-    if (typeof firebase !== 'undefined' && firebase.database) {
-      const snapshot = await firebase.database().ref('jadwalKesiswaan').once('value');
-      const data = snapshot.val();
-      if (data) {
-        listJadwal = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-      }
-    } else if (typeof db !== 'undefined') {
-      const snapshot = await db.collection('jadwalKesiswaan').get();
-      listJadwal = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-  } catch (err) {
-    console.error('Gagal mengambil data jadwal dari Firebase:', err);
-  }
+  // Menggunakan data dari DB lokal
+  let listJadwal = DB.jadwalKesiswaan || [];
 
-  // Load Catatan dari Firebase
+  // Load Catatan
   loadCatatanKesiswaan(filterTahun, filterBulan);
 
   // Render Grid Kalender
@@ -12088,7 +12234,7 @@ async function renderJadwalKesiswaan() {
 
   for (let d = 1; d <= tglAkhirBulan; d++) {
     const formatTgl = `${filterTahun}-${String(filterBulan).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const agendaHariIni = listJadwal.filter(j => j.tanggal === formatTgl);
+    const agendaHariIni = listJadwal.filter(j => j && j.tanggal === formatTgl);
 
     let htmlAgenda = agendaHariIni.map(a => {
       let colorClass = 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300';
@@ -12112,25 +12258,20 @@ async function renderJadwalKesiswaan() {
   }
 }
 
-// C. HAPUS JADWAL DARI FIREBASE
+// C. HAPUS JADWAL
 async function hapusJadwalKesiswaan(id) {
   if (!confirm('Apakah Anda yakin ingin menghapus agenda ini?')) return;
 
-  try {
-    if (typeof firebase !== 'undefined' && firebase.database) {
-      await firebase.database().ref(`jadwalKesiswaan/${id}`).remove();
-    } else if (typeof db !== 'undefined') {
-      await db.collection('jadwalKesiswaan').doc(id).delete();
-    }
-
+  DB.jadwalKesiswaan = (DB.jadwalKesiswaan || []).filter(j => String(j.id) !== String(id));
+  
+  const berhasil = await simpanDataKeStorage('jadwalKesiswaan');
+  if (berhasil) {
     if (typeof showToast === 'function') showToast('Agenda dihapus!', 'info');
     renderJadwalKesiswaan();
-  } catch (err) {
-    console.error('Gagal menghapus agenda:', err);
   }
 }
 
-// D. SIMPAN CATATAN KE FIREBASE
+// D. SIMPAN CATATAN
 async function simpanCatatanKesiswaan() {
   const filterTahun = document.getElementById('filterTahunJadwal')?.value;
   const filterBulan = document.getElementById('filterBulanJadwal')?.value;
@@ -12139,37 +12280,23 @@ async function simpanCatatanKesiswaan() {
   if (!filterTahun || !filterBulan) return;
   const docKey = `${filterTahun}_${filterBulan}`;
 
-  try {
-    if (typeof firebase !== 'undefined' && firebase.database) {
-      await firebase.database().ref(`catatanKesiswaan/${docKey}`).set({ catatan: teks });
-    } else if (typeof db !== 'undefined') {
-      await db.collection('catatanKesiswaan').doc(docKey).set({ catatan: teks });
-    }
-    if (typeof showToast === 'function') showToast('Catatan disimpan ke Cloud!', 'success');
-  } catch (err) {
-    console.error('Gagal menyimpan catatan:', err);
+  if (!DB.catatanKesiswaan) DB.catatanKesiswaan = {};
+  DB.catatanKesiswaan[docKey] = teks;
+
+  const berhasil = await simpanDataKeStorage('catatanKesiswaan');
+  if (berhasil && typeof showToast === 'function') {
+    showToast('Catatan disimpan ke Cloud!', 'success');
   }
 }
 
-// E. LOAD CATATAN DARI FIREBASE
-async function loadCatatanKesiswaan(tahun, bulan) {
+// E. LOAD CATATAN
+function loadCatatanKesiswaan(tahun, bulan) {
   const docKey = `${tahun}_${bulan}`;
   const textarea = document.getElementById('catatanKesiswaan');
   if (!textarea) return;
 
-  try {
-    let catatanTeks = '';
-    if (typeof firebase !== 'undefined' && firebase.database) {
-      const snap = await firebase.database().ref(`catatanKesiswaan/${docKey}`).once('value');
-      if (snap.exists()) catatanTeks = snap.val().catatan || '';
-    } else if (typeof db !== 'undefined') {
-      const doc = await db.collection('catatanKesiswaan').doc(docKey).get();
-      if (doc.exists) catatanTeks = doc.data().catatan || '';
-    }
-    textarea.value = catatanTeks;
-  } catch (err) {
-    console.error('Gagal memuat catatan:', err);
-  }
+  const catatanTeks = DB.catatanKesiswaan ? (DB.catatanKesiswaan[docKey] || '') : '';
+  textarea.value = catatanTeks;
 }
 
 // ========================================================
