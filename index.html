@@ -758,7 +758,11 @@ function muatSemuaDataDariDatabase() {
         DB.hariAktif = cloudData.hariAktif || [];
         DB.libur = safeArray(cloudData.libur);
 
-// 2. LOAD DATA KEHADIRAN (HIBRIDA & DEDUPLIKASI ANTI-DATA GANDA)
+        // 🟢 TAMBAHAN: MUAT DATA JADWAL & CATATAN KESISWAAN
+        DB.jadwalKesiswaan = safeArray(cloudData.jadwalKesiswaan);
+        DB.catatanKesiswaan = cloudData.catatanKesiswaan || {};
+
+        // 2. LOAD DATA KEHADIRAN (HIBRIDA & DEDUPLIKASI ANTI-DATA GANDA)
         DB.kehadiran = [];
         if (cloudData.kehadiran) {
           const rawKehadiran = cloudData.kehadiran;
@@ -859,6 +863,11 @@ function muatSemuaDataDariDatabase() {
         const activePage = currentPage || 'dashboard';
         if (typeof renderPage === "function" && !halamanInput.includes(activePage)) {
           renderPage(activePage);
+        }
+
+        // 🟢 TAMBAHAN: PAKSA RE-RENDER KALENDER JADWAL SAAT DATA DITERIMA FROM FIREBASE
+        if (typeof renderJadwalKesiswaan === "function") {
+          renderJadwalKesiswaan();
         }
       }
     });
