@@ -4043,35 +4043,36 @@ function filterSiswaAdmin() {
 
   let data = [...(DB.siswa || [])];
 
-  // 1. Filter Efisien
-  if (kelas) {
-    data = data.filter(s => (s.kelas || '').trim() === kelas);
+  // 1. Filter Kelas (Abaikan jika memilih "Semua Kelas" atau nilainya kosong)
+  if (kelas && kelas !== 'Semua Kelas') {
+    data = data.filter(s => String(s.kelas || '').trim().toLowerCase() === kelas.toLowerCase());
   }
 
+  // 2. Filter Pencarian (Di-wrap String() agar aman dari Tipe Data Number / Angka)
   if (search) {
     data = data.filter(s => {
-      const nama = (s.nama || '').toLowerCase();
-      const nisn = (s.nisn || '').toLowerCase();
-      const asal = (s.asalSekolah || '').toLowerCase();
+      const nama = String(s.nama || '').toLowerCase();
+      const nisn = String(s.nisn || '').toLowerCase();
+      const asal = String(s.asalSekolah || '').toLowerCase();
       return nama.includes(search) || nisn.includes(search) || asal.includes(search);
     });
   }
 
-  // 2. Sorting Cepat (Optimasi Pembanding String)
+  // 3. Sorting Cepat
   data.sort((a, b) => {
-    const ka = a.kelas || '';
-    const kb = b.kelas || '';
+    const ka = String(a.kelas || '');
+    const kb = String(b.kelas || '');
     if (ka !== kb) return ka < kb ? -1 : 1;
     
-    const na = a.nama || '';
-    const nb = b.nama || '';
+    const na = String(a.nama || '');
+    const nb = String(b.nama || '');
     return na < nb ? -1 : (na > nb ? 1 : 0);
   });
 
   const body = document.getElementById('bodySiswaAdmin');
   if (!body) return;
 
-  // 3. Render Super Cepat Menggunakan DocumentFragment (Menghindari Freeze UI)
+  // 4. Render Menggunakan DocumentFragment
   if (data.length === 0) {
     body.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-gray-400">Tidak ada data siswa yang cocok</td></tr>`;
     return;
@@ -4122,11 +4123,9 @@ function filterSiswaAdmin() {
     fragment.appendChild(tr);
   });
 
-  // Masukkan semua baris sekaligus dalam 1 proses reflow
   body.innerHTML = '';
   body.appendChild(fragment);
 
-  // Panggil Lucide Icons hanya jika diperlukan
   if (typeof lucide !== 'undefined' && lucide.createIcons) {
     requestAnimationFrame(() => lucide.createIcons());
   }
