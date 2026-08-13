@@ -10249,126 +10249,129 @@ async function hapusPenebusanPoin(idPenebusan) {
   }
 }
 
-    // ====================================================
-    // PERBAIKAN LANGKAH 4: FUNGSI OPERASIONAL MODAL, PENYIMPANAN DATA & CETAK SURAT DINAS
-    // ====================================================
+// ===================================================================
+// 🟡 FUNGSI MODAL TANDAI / TANGANI TINDAKAN KESISWAAN
+// ===================================================================
 
-    // A. Fungsi Membuka Jendela Pengisian Solusi (DIPERBAIKI)
-    function bukaModalTindakan(idSiswa, nama, levelTeks, petugas) {
-      document.getElementById('mtSiswaId').value = idSiswa;
-      document.getElementById('mtNama').value = nama;
-      document.getElementById('mtLevelTeks').value = levelTeks;
-      document.getElementById('mtPetugas').value = petugas;
-      document.getElementById('mtSolusi').value = ""; // Bersihkan form lama
-
-      // Cari tahu apakah siswa ini sudah pernah ditangani sebelumnya untuk kasus level ini
-      const riwayatLama = (DB.riwayatTindakan || []).find(r => String(r.siswaId) === String(idSiswa) && r.levelTeks === levelTeks);
-      
-      const inputTgl = document.getElementById('mtTanggalTindakan');
-      if (inputTgl) {
-        if (riwayatLama && riwayatLama.tanggalEksekusi) {
-          // Jika sudah ada riwayat, tampilkan tanggal penindakan lama yang tersimpan
-          inputTgl.value = riwayatLama.tanggalEksekusi;
-          document.getElementById('mtSolusi').value = riwayatLama.solusi || "";
-        } else {
-          // Jika kasus baru, set default otomatis ke TANGGAL HARI INI (tetap bisa diedit/dimundurkan)
-          inputTgl.value = new Date().toISOString().split('T')[0];
-        }
-      }
-
-      // Munculkan modal ke layar
-      document.getElementById('modalTindakanKesiswaan').classList.remove('hidden');
-    }
-
-    // B. Fungsi Menutup Jendela Pengisian Solusi
-    function tutupModalTindakan() {
-      document.getElementById('modalTindakanKesiswaan').classList.add('hidden');
-    }
-
-// C. Fungsi Menyimpan Hasil Konseling / Pembinaan ke Database (SINKRON CLOUD & LOCAL)
-async function simpanSolusiTindakan() {
-  const petugas = document.getElementById('mtPetugas').value; 
-  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
-
-  // 1. Validasi Hak Akses
-  if (petugas === 'Wali Kelas' && userRole !== 'walas' && userRole !== 'admin') {
-    alert('⚠️ Akses Ditolak! Anda bukan Wali Kelas.'); return;
-  }
-  if (petugas === 'Guru BK' && userRole !== 'bk' && userRole !== 'admin') {
-    alert('⚠️ Akses Ditolak! Anda bukan Guru BK.'); return;
-  }
-  if (petugas === 'Wakasis' && userRole !== 'wakasis' && userRole !== 'admin') {
-    alert('⚠️ Akses Ditolak! Anda bukan Wakasek Kesiswaan.'); return;
-  }
-
-  // 2. Ambil Nilai Form
-  const siswaId = document.getElementById('mtSiswaId').value;
-  const levelTeks = document.getElementById('mtLevelTeks').value;
+// 1. Fungsi Membuka Modal Tangani
+function bukaModalTindakan(idSiswa, nama, statusTeks, petugasTarget) {
+  document.getElementById('mtSiswaId').value = idSiswa;
+  document.getElementById('mtNama').value = nama;
+  document.getElementById('mtLevelTeks').value = statusTeks;
+  document.getElementById('mtPetugas').value = petugasTarget;
+  document.getElementById('mtSolusi').value = '';
   
-  // Tangani jika element mtGuru tidak ada / opsional
-  const elGuru = document.getElementById('mtGuru');
-  const guruPenindak = elGuru ? elGuru.value : (currentUser ? currentUser.nama || currentUser.name : 'Petugas');
-  
-  const solusiText = document.getElementById('mtSolusi').value.trim();
-  const tanggalPilihan = document.getElementById('mtTanggalTindakan').value;
+  const inputTgl = document.getElementById('mtTanggalTindakan');
+  if (inputTgl) inputTgl.value = new Date().toISOString().split('T')[0];
 
-  // 3. Validasi Input Form
-  if (!tanggalPilihan) {
-    alert('Mohon tentukan tanggal pelaksanaan tindakan terlebih dahulu!');
+  const modal = document.getElementById('modalTindakanKesiswaan');
+  if (modal) modal.classList.remove('hidden');
+}
+
+// 2. Fungsi Menutup Modal Tangani
+function tutupModalTindakan() {
+  const modal = document.getElementById('modalTindakanKesiswaan');
+  if (modal) modal.classList.add('hidden');
+}
+
+// 3. Fungsi Eksekusi Simpan Solusi Tindakan
+function simpanSolusiTindakan() {
+  const siswaId = document.getElementById('mtSiswaId')?.value;
+  const levelTeks = document.getElementById('mtLevelTeks')?.value;
+  const petugas = document.getElementById('mtPetugas')?.value;
+  const namaGuru = document.getElementById('mtGuru')?.value;
+  const tglEksekusi = document.getElementById('mtTanggalTindakan')?.value;
+  const solusi = document.getElementById('mtSolusi')?.value.trim();
+
+  if (!solusi) {
+    if (typeof tampilkanNotifikasi === 'function') {
+      tampilkanNotifikasi('⚠️ Mohon isi hasil bimbingan & solusi penanganan terlebih dahulu!', 'error');
+    }
     return;
   }
 
-  if (!solusiText) {
-    alert('Mohon isi uraian hasil bimbingan atau solusi penanganan terlebih dahulu!');
-    return;
+  // 1. Objek data tindakan baru
+  const newTindakan = {
+    id: 'TDK_' + Date.now(),
+    siswaId: siswaId,
+    levelTeks: levelTeks,
+    petugas: petugas,
+    eksekutor: namaGuru,
+    tanggalEksekusi: tglEksekusi || new Date().toISOString().split('T')[0],
+    solusi: solusi,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!Array.isArray(DB.riwayatTindakan)) {
+    DB.riwayatTindakan = [];
   }
 
+  DB.riwayatTindakan.push(newTindakan);
+
+  // 2. Simpan ke LocalStorage (Sangat Cepat)
   try {
-    // 4. Update State/Memory Data
-    if (!DB.riwayatTindakan) {
-      DB.riwayatTindakan = [];
-    } else {
-      // Hapus record lama jika memperbarui data dengan siswaId & levelTeks yang sama
-      DB.riwayatTindakan = DB.riwayatTindakan.filter(r => !(String(r.siswaId) === String(siswaId) && r.levelTeks === levelTeks));
-    }
-
-    const recordBaru = {
-      idTindakan: 'TND-' + Date.now(),
-      siswaId: siswaId,
-      levelTeks: levelTeks,
-      otoritasPetugas: petugas,
-      namaGuru: guruPenindak,
-      solusi: solusiText,
-      tanggalEksekusi: tanggalPilihan
-    };
-
-    DB.riwayatTindakan.push(recordBaru);
-
-    // 5. SIMPAN KE STORAGE LOKAL & CLOUD (PENTING!)
     localStorage.setItem('sik_riwayat_tindakan', JSON.stringify(DB.riwayatTindakan));
+  } catch (e) {
+    console.error("Gagal simpan ke LocalStorage:", e);
+  }
 
-    // Panggil helper simpan global jika tersedia (Firebase / Backend Cloud Sync)
-    if (typeof simpanDataKeStorage === 'function') {
-      await simpanDataKeStorage('riwayatTindakan');
+  // 3. Tutup Modal & Refresh UI Seketika (Tanpa menunggu internet)
+  tutupModalTindakan();
+  if (typeof renderBimbinganKesiswaan === 'function') {
+    renderBimbinganKesiswaan();
+  }
+
+  // 4. Munculkan Toast Hijau Langsung
+  if (typeof tampilkanNotifikasi === 'function') {
+    tampilkanNotifikasi('Penanganan telah berhasil disimpan', 'success');
+  } else {
+    let container = document.getElementById('custom-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'custom-toast-container';
+      container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+      document.body.appendChild(container);
     }
 
-    // 6. Umpan Balik & Update UI
-    if (typeof showToast === 'function') {
-      showToast(`Sukses! Catatan pembinaan disimpan untuk tanggal: ${tanggalPilihan}`, 'success');
-    } else {
-      alert(`Sukses! Catatan pembinaan resmi disimpan untuk tanggal pelaksanaan: ${tanggalPilihan}.`);
-    }
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      background-color: #10b981;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      font-weight: 600;
+      font-size: 13px;
+      font-family: sans-serif;
+      transition: all 0.3s ease;
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: auto;
+    `;
+    toast.innerText = 'Penanganan telah berhasil disimpan';
+    container.appendChild(toast);
 
-    tutupModalTindakan();
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+    });
 
-    // Re-render menu bimbingan
-    if (typeof renderBimbinganKesiswaan === 'function') {
-      renderBimbinganKesiswaan();
-    }
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
 
-  } catch (err) {
-    console.error('Gagal menyimpan solusi tindakan:', err);
-    alert('Terjadi kesalahan saat menyimpan data: ' + err.message);
+  // 5. Kirim ke Firebase di Latar Belakang (Non-blocking / Tanpa await)
+  if (typeof firebase !== 'undefined' && firebase.database) {
+    firebase.database().ref(`kesiswaan_cloud/riwayatTindakan/${newTindakan.id}`).set(newTindakan).catch(err => {
+      console.warn("Gagal sinkronisasi background Firebase:", err.message);
+    });
+  } else if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.saveNode === 'function') {
+    FirebaseService.saveNode('riwayatTindakan', DB.riwayatTindakan).catch(err => {
+      console.warn("Gagal sinkronisasi background FirebaseService:", err.message);
+    });
   }
 }
 
