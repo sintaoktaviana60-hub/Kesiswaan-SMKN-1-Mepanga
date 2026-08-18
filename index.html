@@ -6946,69 +6946,86 @@ async function simpanIdentitasSekolahLokal() {
       showToast('Template CSV berhasil diunduh!', 'success');
     }
 
-     function unggahTataTertibMassal(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      document.getElementById('statusFileTT').textContent = file.name;
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const text = e.target.result;
-        const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
-        if (rows.length <= 1) { showToast('File kosong atau format salah!', 'error'); return; }
-  const dataBaru = [];
-      for (let i = 1; i < rows.length; i++) {
-        const columns = rows[i].split(',');
-        if (columns.length >= 3) {
-          const kode = columns[0].replace(/"/g, '').trim();
-          const deskripsi = columns[1].replace(/"/g, '').trim();
-          const poin = parseInt(columns[2]) || 0;
-          
-          // Menentukan kategori pelanggaran secara otomatis berdasarkan bobot poin
-          let kategori = "Ringan";
-          if (poin > 15) kategori = "Sedang";
-          if (poin > 40) kategori = "Berat";
+function unggahTataTertibMassal(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('statusFileTT').textContent = file.name;
+  const reader = new FileReader();
 
-          dataBaru.push({ 
-            id: kode, 
-            kode: kode, 
-            nama: deskripsi,        // 🌟 WAJIB ADA: Menyelaraskan dengan fungsi input pelanggaran
-            deskripsi: deskripsi, 
-            jenis: deskripsi, 
-            poin: poin,
-            kategori: kategori      // 🌟 WAJIB ADA: Mencegah error pembagian kategori poin
-          });
-        }
+  reader.onload = async function (e) {
+    const text = e.target.result;
+    const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
+    if (rows.length <= 1) { showToast('File kosong atau format salah!', 'error'); return; }
+
+    const dataBaru = [];
+    for (let i = 1; i < rows.length; i++) {
+      const columns = rows[i].split(',');
+      if (columns.length >= 3) {
+        const kode = columns[0].replace(/"/g, '').trim();
+        const deskripsi = columns[1].replace(/"/g, '').trim();
+        const poin = parseInt(columns[2]) || 0;
+
+        let kategori = "Ringan";
+        if (poin > 15) kategori = "Sedang";
+        if (poin > 40) kategori = "Berat";
+
+        dataBaru.push({
+          id: kode,
+          kode: kode,
+          nama: deskripsi,
+          deskripsi: deskripsi,
+          jenis: deskripsi,
+          poin: poin,
+          kategori: kategori
+        });
       }
-      
-      if (dataBaru.length > 0) {
-        // 1. Amankan ke database internal aplikasi
-        DB.tatatertib = dataBaru;
-        simpanDataKeStorage("tatatertib");
-        
-        // 2. 🌟 Pemicu Utama: Dorong perubahan data tata tertib secara instan ke Firebase Cloud
-        if (typeof simpanDataKeStorage === 'function') {
-          simpanDataKeStorage();
-          console.log("Data tata tertib baru berhasil didorong ke Firebase Cloud.");
+    }
+
+    if (dataBaru.length > 0) {
+      // 1. Perbarui memori lokal aplikasi
+      DB.tatatertib = dataBaru;
+
+      // 2. Langsung tulis ke Firebase Database (Tembak langsung tanpa melewati simpanDataKeStorage/FirebaseService)
+      try {
+        let dbRef = null;
+
+        // Mendapatkan instance Firebase Realtime Database
+        if (typeof firebase !== 'undefined' && firebase.database) {
+          dbRef = firebase.database().ref('kesiswaan_cloud/tatatertib');
+        } else if (window.dbRefTataTertib) {
+          dbRef = window.dbRefTataTertib;
+        }
+
+        if (dbRef) {
+          await dbRef.set(DB.tatatertib);
+          renderKelolaTataTertib();
+          showToast(`Berhasil menyimpan ${dataBaru.length} aturan ke Firebase!`, 'success');
         } else {
-          console.warn("Fungsi simpanDataKeStorage tidak ditemukan. Memeriksa jalur database alternatif...");
-          // Jalur alternatif jika fungsi simpanDataKeStorage Anda terkunci di area fungsi lain
-          let targetDb = typeof database !== 'undefined' ? database : (window.firebase?.apps?.[0]?.database());
-          if (targetDb) {
-            targetDb.ref('kesiswaan_cloud/tatatertib').set(DB.tatatertib);
-          }
+          // Jika SDK Firebase belum siap di window, tunggu 1 detik lalu coba simpan ulang
+          setTimeout(() => {
+            if (typeof firebase !== 'undefined' && firebase.database) {
+              firebase.database().ref('kesiswaan_cloud/tatatertib').set(DB.tatatertib);
+            }
+          }, 1000);
+          
+          renderKelolaTataTertib();
+          showToast(`Berhasil memuat ${dataBaru.length} aturan! (Sistem menghubungkan ke Cloud...)`, 'info');
         }
 
-        // 3. Render ulang tampilan antarmuka
+      } catch (dbErr) {
+        console.error("Gagal menulis langsung ke Firebase:", dbErr);
         renderKelolaTataTertib();
-        showToast(`Sukses memuat ${dataBaru.length} aturan baru dan disinkronkan ke Cloud!`, 'success');
-      } else {
-        showToast('Gagal memproses file, cek format kolom', 'error');
+        showToast('Gagal terhubung ke Firebase: ' + dbErr.message, 'error');
       }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  }
 
+    } else {
+      showToast('Gagal memproses file, cek format kolom', 'error');
+    }
+  };
+
+  reader.readAsText(file);
+  event.target.value = '';
+}
 
   function renderKelolaKreditPoin() {
   const mc = document.getElementById('mainContent');
