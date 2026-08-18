@@ -6013,167 +6013,128 @@ function loadPenebusanPoinFromFirebase() {
   });
 }
 
-async function simpanKehadiran() {
-  const tanggal = document.getElementById('khTanggal').value;
+// Variable penanda agar tidak terjadi double-save atau loop
+let isSavingKehadiran = false;
 
-  if (!tanggal) {
-    showToast('Pilih tanggal terlebih dahulu!', 'danger');
+function simpanKehadiran() {
+  if (isSavingKehadiran) return;
+
+  const tglInput = document.getElementById('khTanggal')?.value;
+
+  if (!tglInput) {
+    if (typeof showToast === 'function') showToast('Pilih tanggal terlebih dahulu!', 'danger');
     return;
   }
 
-  // Ambil kelas sekretaris
-  const myKelas = currentUser.kelas;
-  const siswaKelas = (DB.siswa || []).filter(s => s.kelas === myKelas);
-  const dataKelas = [];
+  const myKelas = (currentUser && currentUser.kelas) ? currentUser.kelas : '';
+  const siswaKelas = (DB && DB.siswa) ? DB.siswa.filter(s => s.kelas === myKelas) : [];
 
-  // Pastikan hariAktif tersedia
   if (!Array.isArray(DB.hariAktif)) DB.hariAktif = [];
-
-  // Simpan hari efektif jika belum ada
-  const sudahAda = DB.hariAktif.some(h =>
-      h.tanggal === tanggal &&
-      h.kelas === myKelas
-  );
-
+  const sudahAda = DB.hariAktif.some(h => h.tanggal === tglInput && h.kelas === myKelas);
   if (!sudahAda) {
-      DB.hariAktif.push({
-          tanggal: tanggal,
-          kelas: myKelas
-      });
+    DB.hariAktif.push({ tanggal: tglInput, kelas: myKelas });
   }
 
   if (!Array.isArray(DB.kehadiran)) DB.kehadiran = [];
 
-  // Hapus data lama di tanggal & kelas yang sama agar tidak duplikat saat ditimpa data baru
+  // Hapus data tanggal ini untuk kelas bersangkutan agar tidak duplikat
   DB.kehadiran = DB.kehadiran.filter(k => {
-    const s = DB.siswa.find(x => x.id == k.siswaId);
-    return !(s && s.kelas === myKelas && k.tanggal === tanggal);
+    const s = DB.siswa.find(x => String(x.id) === String(k.siswaId));
+    return !(s && s.kelas === myKelas && k.tanggal === tglInput);
   });
 
-  // Input data baru berdasarkan pilihan sekretaris
-  for (const s of siswaKelas) {
-    const status = document.getElementById('kh-' + s.id).value;
+  // Ambil pilihan dari dropdown
+  siswaKelas.forEach(s => {
+    const elSelect = document.getElementById(`kh-${s.id}`);
+    if (!elSelect) return;
 
-    // Jika statusnya BUKAN strip ("-"), maka masukkan ke database (termasuk status "hadir")
-    if (status !== '-') {
-
-      const id = "ABS_" + Date.now() + "_" + s.id;
-
-      const dataAbsen = {
-          id: id,
-          siswaId: s.id,
-          tanggal: tanggal,
-          kelas: myKelas,
-          status: status.toLowerCase()
-      };
-
-      DB.kehadiran.push(dataAbsen);
-      dataKelas.push(dataAbsen);
-    }
-  }
-
-  await simpanKehadiranKelas(
-    tanggal,
-    myKelas,
-    dataKelas
-  );
-
-  // Lanjut ke engine utama bawaan sistem Anda untuk sinkronisasi ke Firebase
-  await simpanKehadiranDanSync();
-}
-
-// ===================================================================
-// ENGINE UTAMA: HITUNG AKUMULASI POIN KETIDAKHADIRAN KE DATA MASTER SISWA
-// ===================================================================
-async function simpanKehadiranDanSync() {
-  if (!DB.siswa) return;
-
-  DB.siswa.forEach(siswa => {
-
-    // =========================
-    // HITUNG ABSENSI
-    // =========================
-    let totalPoinAbsen = 0;
-
-    const logAbsen = (DB.kehadiran || []).filter(
-      k => String(k.siswaId) == String(siswa.id)
-    );
-
-    logAbsen.forEach(log => {
-      const st = log.status.toLowerCase();
-
-      if (st === 'alpa' || st === 'a') totalPoinAbsen += 3;
-      else if (st === 'izin' || st === 'i') totalPoinAbsen += 1;
-      else if (st === 'sakit' || st === 's') totalPoinAbsen += 0.5;
-    });
-
-    siswa.poinAbsen = totalPoinAbsen;
-
-    // =========================
-    // HITUNG PELANGGARAN
-    // =========================
-    let totalPoinTataTertib = 0;
-
-    if (DB.pelanggaran) {
-      const pelanggaranSiswa = DB.pelanggaran.filter(p =>
-        String(p.siswaId) === String(siswa.id) ||
-        (p.namaSiswa || "").trim().toLowerCase() === siswa.nama.trim().toLowerCase()
-      );
-
-      pelanggaranSiswa.forEach(p => {
-        const tt = (DB.tatatertib || []).find(x =>
-          x.id == p.jenisId || x.kode == p.jenisId
-        );
-
-        totalPoinTataTertib += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
+    const statusVal = elSelect.value.toLowerCase();
+    if (statusVal !== '-') {
+      DB.kehadiran.push({
+        id: 'KH_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        siswaId: s.id,
+        tanggal: tglInput,
+        status: statusVal
       });
     }
-
-    siswa.poinPelanggaranDasar = totalPoinTataTertib;
-
-    // ===================================================================
-    // 🔥 PERBAIKAN RUMUS UTAMA: Mencegah Terhapusnya Nilai Poin Penebusan
-    // ===================================================================
-    const totalPoinKotor = totalPoinAbsen + totalPoinTataTertib;
-    const pengurangPenebusan = parseInt(siswa.poinPenebusan) || 0;
-    
-    // Total poin akhir tidak boleh di bawah 0 (nol)
-    siswa.poin = Math.max(0, totalPoinKotor - pengurangPenebusan);
   });
 
-  // =========================
-  // SIMPAN LOCAL & CLOUD
-  // =========================
-  localStorage.setItem('kesiswaan_db', JSON.stringify(DB));
-
-  if (typeof saveDB === "function") {
-    saveDB();
-  }
-
-  // Amankan sinkronisasi murni menuju kesiswaan_cloud
-if (false) {
-    await simpanDataKeStorage("siswa");
-}
-  // =========================
-  // UI UPDATE
-  // =========================
-  if (typeof renderDashboardKesiswaanBaru === "function") {
-    renderDashboardKesiswaanBaru();
-  } else if (typeof renderDashboard === "function") {
-    renderDashboard();
-  }
-
-  if (typeof addAuditLog === "function") addAuditLog('Input Kehadiran');
-
-  if (typeof showToast === "function") {
-    showToast('Kehadiran berhasil disimpan ke Firebase!', 'success');
-  }
-
-  if (typeof muatUlangStatusAbsenSekre === "function") {
-    muatUlangStatusAbsenSekre();
-  }
+  // Jalankan proses simpan langsung
+  simpanKehadiranDanSync();
 }
 
+function simpanKehadiranDanSync() {
+  if (isSavingKehadiran) return;
+  isSavingKehadiran = true;
+
+  // 1. Hitung poin di memori lokal secara instan
+  if (Array.isArray(DB.siswa)) {
+    DB.siswa.forEach(siswa => {
+      let totalPoinAbsen = 0;
+      const logAbsen = (DB.kehadiran || []).filter(k => String(k.siswaId) === String(siswa.id));
+
+      logAbsen.forEach(log => {
+        const st = String(log.status).toLowerCase();
+        if (st === 'alpa' || st === 'a') totalPoinAbsen += 3;
+        else if (st === 'izin' || st === 'i') totalPoinAbsen += 1;
+        else if (st === 'sakit' || st === 's') totalPoinAbsen += 0.5;
+      });
+
+      siswa.poinAbsen = totalPoinAbsen;
+
+      let totalPoinTataTertib = 0;
+      if (DB.pelanggaran) {
+        const pelanggaranSiswa = DB.pelanggaran.filter(p =>
+          String(p.siswaId) === String(siswa.id) ||
+          (p.namaSiswa || "").trim().toLowerCase() === siswa.nama.trim().toLowerCase()
+        );
+
+        pelanggaranSiswa.forEach(p => {
+          const tt = (DB.tatatertib || []).find(x => x.id == p.jenisId || x.kode == p.jenisId);
+          totalPoinTataTertib += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
+        });
+      }
+
+      siswa.poinPelanggaranDasar = totalPoinTataTertib;
+      const pengurangPenebusan = parseInt(siswa.poinPenebusan) || 0;
+      siswa.poin = Math.max(0, (totalPoinAbsen + totalPoinTataTertib) - pengurangPenebusan);
+    });
+  }
+
+  // UBAH TAMPILAN TOMBOL MENJADI LOADING
+  const btnSimpan = document.querySelector("button[onclick='simpanKehadiran()']");
+  if (btnSimpan) {
+    btnSimpan.disabled = true;
+    btnSimpan.innerHTML = '⏳ Menyimpan...';
+  }
+
+  // 2. Simpan LANGSUNG ke Node spesifik Firebase (Sangat Ringan & Cepat)
+  const updates = {};
+  updates["kesiswaan_cloud/kehadiran"] = DB.kehadiran || [];
+  updates["kesiswaan_cloud/hariAktif"] = DB.hariAktif || [];
+
+  firebase.database().ref().update(updates)
+    .then(() => {
+      isSavingKehadiran = false;
+      if (btnSimpan) {
+        btnSimpan.disabled = false;
+        btnSimpan.innerHTML = '💾 Simpan Kehadiran';
+      }
+
+      if (typeof showToast === "function") {
+        showToast('Kehadiran berhasil disimpan!', 'success');
+      }
+    })
+    .catch(err => {
+      isSavingKehadiran = false;
+      if (btnSimpan) {
+        btnSimpan.disabled = false;
+        btnSimpan.innerHTML = '💾 Simpan Kehadiran';
+      }
+      console.error("Firebase Error:", err);
+      if (typeof showToast === "function") showToast('Gagal menyimpan ke Firebase', 'danger');
+    });
+}
           
 function hitungUlangPoinDashboard() {
   if (!DB.siswa) return;
@@ -14694,22 +14655,31 @@ function renderCetakKartuPelajar() {
   mc.innerHTML = `
     <div class="fade-in space-y-4 p-2">
       <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <h3 class="font-bold text-gray-800 dark:text-white text-lg mb-1">Pusat Cetak Kartu Pelajar (Ukuran KTP)</h3>
-        <p class="text-xs text-gray-500 mb-4">Silakan pilih siswa untuk mencetak kartu tampak depan dan tampak belakang.</p>
+        <h3 class="font-bold text-gray-800 dark:text-white text-lg mb-1">Pusat Cetak Kartu Pelajar (Ukuran KTP / PVC)</h3>
+        <p class="text-xs text-gray-500 mb-4">Silakan pilih siswa untuk mencetak kartu atau ekspor ke CorelDraw (.SVG).</p>
         
-        <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/40 rounded-xl border border-gray-200/60 dark:border-gray-700 flex flex-wrap items-center gap-3">
-          <label class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Cetak Banyak Sekaligus (A4):</label>
-          
-          <select id="pilihKelasMassal" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none cursor-pointer focus:border-emerald-500">
-            <option value="SEMUA">-- Semua Kelas --</option>
-            ${semuaKelasUnique.map(kls => `<option value="${kls}">Kelas ${kls}</option>`).join('')}
-          </select>
-          
-          <button onclick="aksiBukaJendelaCetakMassal(document.getElementById('pilihKelasMassal').value)" 
-                  class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
-            <span>🖨</span> Cetak Massal Bersandingan
+        <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/40 rounded-xl border border-gray-200/60 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Pilih Kelas:</label>
+            
+            <select id="pilihKelasMassal" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none cursor-pointer focus:border-emerald-500">
+              <option value="SEMUA">-- Semua Kelas --</option>
+              ${semuaKelasUnique.map(kls => `<option value="${kls}">Kelas ${kls}</option>`).join('')}
+            </select>
+            
+            <button onclick="aksiBukaJendelaCetakMassal(document.getElementById('pilihKelasMassal').value)" 
+                    class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
+              <span>🖨</span> Cetak Massal (Browser)
+            </button>
+          </div>
+
+          <!-- TOMBOL DOWNLOAD CORELDRAW -->
+          <button onclick="downloadCorelDrawSVG(document.getElementById('pilihKelasMassal').value)" 
+                  class="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
+            <span>🎨</span> Download Vektor CorelDraw (.SVG)
           </button>
         </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm whitespace-nowrap">
             <thead class="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -14723,16 +14693,13 @@ function renderCetakKartuPelajar() {
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
               ${(DB.siswa || []).map(s => {
-                // 1. CARI DATA DI DB.kelengkapanData YANG COCOK DENGAN ID SISWA INI
                 const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(s.id));
                 
-                // 2. AMBIL VARIABEL DENGAN PRIORITAS KELENGKAPAN DATA TERLEBIH DAHULU
                 const fotoSiswa = kData && kData.foto ? kData.foto : (s.pasFoto || s.foto);
                 const tptLahir = kData && kData.tempatLahir ? kData.tempatLahir : s.tempatLahir;
                 const tglLahir = kData && kData.tanggalLahir ? kData.tanggalLahir : s.tanggalLahir;
                 const alamatSiswa = kData && kData.alamat ? kData.alamat : s.alamat;
 
-                // 3. LOGIKA VALIDASI BARU
                 const isReady = !!(fotoSiswa && tptLahir && tglLahir && alamatSiswa);
                 
                 return `
@@ -14759,6 +14726,256 @@ function renderCetakKartuPelajar() {
       </div>
     </div>
   `;
+}
+
+
+
+// =========================================================================
+// FUNGSI EKSPOR KARTU PELAJAR KE CORELDRAW (FIXED & FULL COREL COMPATIBLE)
+// =========================================================================
+
+function downloadCorelDrawSVG(filterKelas = "SEMUA") {
+  let daftarSiswa = [];
+  if (!filterKelas || filterKelas.toUpperCase() === "SEMUA") {
+    daftarSiswa = DB.siswa || [];
+  } else {
+    daftarSiswa = (DB.siswa || []).filter(s => (s.kelas || '').toUpperCase() === filterKelas.toUpperCase());
+  }
+
+  if (daftarSiswa.length === 0) {
+    alert("Tidak ada data siswa untuk kelas yang dipilih!");
+    return;
+  }
+
+  const escapeXml = (str) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  };
+
+  const namaKepsek = escapeXml(DB.identitas?.kepsek || "Joko Sarwono, S.Pd.");
+  const nipKepsek = escapeXml(DB.identitas?.nipKepsek || "196610161991031010");
+  const logoProv = escapeXml(DB.identitas?.logoProvinsi || "https://via.placeholder.com/100?text=PROV");
+  const logoSekolah = escapeXml(DB.identitas?.logoSekolah || "https://via.placeholder.com/100?text=LOGO");
+  const capStempel = escapeXml(DB.identitas?.capSekolah || "");
+  const ttdKepsek = escapeXml(DB.identitas?.ttdKepsek || "");
+
+  const toTitleCase = (str) => {
+    if (!str || str === '-') return '-';
+    return str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+
+  const formatTanggalLahirIndonesia = (tglStr) => {
+    if (!tglStr || tglStr === '-') return '-';
+    const parts = tglStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      const namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const idxBulan = parseInt(parts[1], 10) - 1;
+      if (idxBulan >= 0 && idxBulan < 12) return `${parseInt(parts[2], 10)} ${namaBulan[idxBulan]} ${parts[0]}`;
+    }
+    return tglStr;
+  };
+
+  const KARTU_PER_HALAMAN = 5;
+  const totalHalaman = Math.ceil(daftarSiswa.length / KARTU_PER_HALAMAN);
+
+  // LOOPING PER HALAMAN A4 SUPAYA CORELDRAW TIDAK ERROR/CRASH
+  for (let pageIdx = 0; pageIdx < totalHalaman; pageIdx++) {
+    const kelompokSiswa = daftarSiswa.slice(pageIdx * KARTU_PER_HALAMAN, (pageIdx + 1) * KARTU_PER_HALAMAN);
+
+    let svgContent = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="210mm" height="297mm" viewBox="0 0 210 297">
+<defs>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&amp;display=swap');
+    .text-base { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .txt-bold { font-weight: 700; }
+    .txt-heavy { font-weight: 800; }
+  </style>
+
+  <!-- Gradient Depan Kartu -->
+  <linearGradient id="bgGradFront" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#ffffff"/>
+    <stop offset="40%" stop-color="#edf6ff"/>
+    <stop offset="80%" stop-color="#cee4fe"/>
+    <stop offset="100%" stop-color="#a0c8f8"/>
+  </linearGradient>
+
+  <!-- Gradient Belakang Kartu -->
+  <linearGradient id="bgGradBack" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#1b3f7a"/>
+    <stop offset="100%" stop-color="#0e2347"/>
+  </linearGradient>
+
+  <!-- ClipPath Rounded Card -->
+  <clipPath id="cardClip">
+    <rect width="87.6" height="55.98" rx="2.5" ry="2.5"/>
+  </clipPath>
+</defs>
+
+<rect width="210" height="297" fill="#ffffff"/>
+`;
+
+    kelompokSiswa.forEach((siswa, idx) => {
+      const kls = (siswa.kelas || '').toUpperCase();
+      const thnSekarang = new Date().getFullYear();
+      let thnLulus = thnSekarang + (kls.includes('XII') ? 1 : kls.includes('XI') ? 2 : 3);
+
+      const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(siswa.id)) || {};
+      const fotoSiswa = escapeXml(kData.foto || siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto");
+      const alamat = escapeXml(toTitleCase(kData.alamat || siswa.alamat || '-'));
+      const tglLahir = formatTanggalLahirIndonesia(kData.tanggalLahir || siswa.tanggalLahir);
+      const tempatLahir = toTitleCase(kData.tempatLahir || siswa.tempatLahir || '-');
+      const ttl = escapeXml(`${tempatLahir}, ${tglLahir}`);
+      
+      const jkMentah = (siswa.jk || siswa.jenisKelamin || '').toUpperCase();
+      const jkTerformat = escapeXml(jkMentah === 'L' ? 'Laki-laki' : (jkMentah === 'P' ? 'Perempuan' : '-'));
+
+      let jurusan = kls;
+      if (kls.includes("TKJ")) jurusan = "Teknik Komputer dan Jaringan";
+      else if (kls.includes("AKL")) jurusan = "Akuntansi dan Keuangan Lembaga";
+      else if (kls.includes("BDP")) jurusan = "Pemasaran";
+      else if (kls.includes("ATPH")) jurusan = "Agribisnis Tanaman Pangan dan Hortikultura";
+      jurusan = escapeXml(jurusan);
+
+      const namaSiswa = escapeXml((siswa.nama || '').toUpperCase());
+      const nisnSiswa = escapeXml(siswa.nisn || '-');
+
+      const posY = 6 + (idx * 58.48);
+      const xFront = 13.4;
+      const xBack = 109;
+
+      // =========================================================================
+      // KARTU BAGIAN DEPAN
+      // =========================================================================
+      svgContent += `
+      <g transform="translate(${xFront}, ${posY})" class="text-base">
+        <g clip-path="url(#cardClip)">
+          <!-- Base Background -->
+          <rect width="87.6" height="55.98" fill="url(#bgGradFront)"/>
+          <rect width="87.6" height="55.98" rx="2.5" fill="none" stroke="#b0c4de" stroke-width="0.3"/>
+
+          <!-- Watermark Logo Sekolah -->
+          <image href="${logoSekolah}" x="25.8" y="11" width="36" height="36" opacity="0.10" preserveAspectRatio="xMidYMid meet"/>
+
+          <!-- Kop Header Sekolah -->
+          <rect width="87.6" height="14.2" fill="#ffffff"/>
+          <image href="${logoProv}" x="2.5" y="1.2" width="9" height="11" preserveAspectRatio="xMidYMid meet"/>
+          <image href="${logoSekolah}" x="76.1" y="1.2" width="9" height="11" preserveAspectRatio="xMidYMid meet"/>
+          
+          <text x="43.8" y="3.2" text-anchor="middle" font-size="1.9" class="txt-bold" fill="#1e293b">PEMERINTAH PROVINSI SULAWESI TENGAH</text>
+          <text x="43.8" y="5.1" text-anchor="middle" font-size="1.8" class="txt-bold" fill="#334155">DINAS PENDIDIKAN</text>
+          <text x="43.8" y="9.2" text-anchor="middle" font-size="3.6" class="txt-heavy" fill="#0f172a">SMK NEGERI 1 MEPANGA</text>
+          <text x="43.8" y="11.8" text-anchor="middle" font-size="1.6" fill="#475569">Jalan Nusantara No.116 Kayu Agung, Kecamatan Mepanga</text>
+
+          <!-- Garis Hitam Ganda Kop -->
+          <line x1="2" y1="14.2" x2="85.6" y2="14.2" stroke="#000000" stroke-width="0.4"/>
+          <line x1="2" y1="14.9" x2="85.6" y2="14.9" stroke="#000000" stroke-width="0.15"/>
+
+          <!-- Subtitle Kartu Pelajar -->
+          <text x="43.8" y="19.5" text-anchor="middle" font-size="2.9" class="txt-heavy" fill="#1e3a8a" letter-spacing="0.3">KARTU PELAJAR</text>
+          <line x1="33" y1="20.4" x2="54.6" y2="20.4" stroke="#1e3a8a" stroke-width="0.35"/>
+
+          <!-- Foto Siswa & Badge Aktif -->
+          <rect x="3" y="21.8" width="18.5" height="23" rx="0.8" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.3"/>
+          <image href="${fotoSiswa}" x="3" y="21.8" width="18.5" height="23" preserveAspectRatio="xMidYMid slice"/>
+          <rect x="6.2" y="45.5" width="12" height="2.8" rx="1.4" fill="#16a34a"/>
+          <text x="12.2" y="47.4" text-anchor="middle" font-size="1.5" class="txt-bold" fill="#ffffff">AKTIF</text>
+
+          <!-- Data Siswa -->
+          <g font-size="1.85" class="txt-bold">
+            <text x="23.5" y="25" fill="#334155">Nama</text><text x="31" y="25" fill="#334155">:</text><text x="32" y="25" fill="#0057b8" class="txt-heavy">${namaSiswa}</text>
+            <text x="23.5" y="28" fill="#334155">NISN</text><text x="31" y="28" fill="#334155">:</text><text x="32" y="28" fill="#0f172a">${nisnSiswa}</text>
+            <text x="23.5" y="31" fill="#334155">TTL</text><text x="31" y="31" fill="#334155">:</text><text x="32" y="31" fill="#0f172a">${ttl}</text>
+            <text x="23.5" y="34" fill="#334155">Jurusan</text><text x="31" y="34" fill="#334155">:</text><text x="32" y="34" fill="#0f172a">${jurusan}</text>
+            <text x="23.5" y="37" fill="#334155">JK</text><text x="31" y="37" fill="#334155">:</text><text x="32" y="37" fill="#0f172a">${jkTerformat}</text>
+            <text x="23.5" y="40" fill="#334155">Alamat</text><text x="31" y="40" fill="#334155">:</text><text x="32" y="40" fill="#0f172a">${alamat}</text>
+            <text x="23.5" y="43" fill="#334155">Berlaku</text><text x="31" y="43" fill="#334155">:</text><text x="32" y="43" fill="#0f172a">s/d ${thnLulus}</text>
+          </g>
+
+          <!-- Area TTD & Stempel Rapi Simetris -->
+          <g font-size="1.5" text-anchor="middle" fill="#0f172a">
+            <text x="70" y="37.2">Kayu Agung, 18 Agustus 2026</text>
+            <text x="70" y="39.0">Kepala Sekolah,</text>
+            
+            ${capStempel ? `<image href="${capStempel}" x="57" y="37.8" width="11" height="11" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>` : ''}
+            ${ttdKepsek ? `<image href="${ttdKepsek}" x="63.5" y="38.2" width="13" height="8.5" preserveAspectRatio="xMidYMid meet"/>` : ''}
+            
+            <text x="70" y="48.2" font-size="1.75" class="txt-heavy" text-decoration="underline">${namaKepsek}</text>
+            <text x="70" y="50.0" font-size="1.35" class="txt-bold">NIP. ${escapeXml(nipKepsek.replace('NIP.', '').trim())}</text>
+          </g>
+
+          <!-- Ribbon Bottom Footer -->
+          <rect x="0" y="52.2" width="87.6" height="3.78" fill="#1b3f7a"/>
+          <text x="43.8" y="54.6" text-anchor="middle" font-size="1.6" class="txt-heavy" fill="#ffffff" letter-spacing="0.2">SMK NEGERI 1 MEPANGA • MUDA • BISA • LUAR BIASA</text>
+        </g>
+      </g>`;
+
+      // =========================================================================
+      // KARTU BAGIAN BELAKANG (TATA TERTIB - FONT 1.85)
+      // =========================================================================
+      const qrUrl = escapeXml(`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(siswa.nisn || siswa.nis || siswa.id)}`);
+
+      svgContent += `
+      <g transform="translate(${xBack}, ${posY})" class="text-base">
+        <g clip-path="url(#cardClip)">
+          <!-- Background Gradient Belakang -->
+          <rect width="87.6" height="55.98" fill="url(#bgGradBack)"/>
+          <rect width="87.6" height="55.98" rx="2.5" fill="none" stroke="#2b6cb0" stroke-width="0.3"/>
+
+          <!-- Ornaments -->
+          <circle cx="95" cy="-5" r="24" fill="#ffffff" opacity="0.14"/>
+          <circle cx="85" cy="55" r="16" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.15"/>
+          <rect x="-10" y="2" width="120" height="4.8" fill="#ffffff" opacity="0.20" transform="rotate(-18)"/>
+          <rect x="-10" y="7" width="120" height="6.8" fill="#ffffff" opacity="0.10" transform="rotate(-18)"/>
+
+          <!-- Watermark Logo Belakang -->
+          <image href="${logoSekolah}" x="26.8" y="11" width="34" height="34" opacity="0.05" preserveAspectRatio="xMidYMid meet"/>
+
+          <!-- Header Tata Tertib -->
+          <rect y="3" width="87.6" height="5" fill="rgba(255,255,255,0.10)"/>
+          <text x="43.8" y="6.5" text-anchor="middle" font-size="2.8" class="txt-heavy" fill="#ffd54f" letter-spacing="0.3">TATA TERTIB PEMEGANG KARTU PELAJAR</text>
+
+          <!-- Poin-Poin Tata Tertib (Font Size: 1.85) -->
+          <g font-size="1.85" fill="#ffffff">
+            <text x="4" y="11.8">1. Kartu Pelajar merupakan identitas resmi peserta didik SMK Negeri 1 Mepanga.</text>
+            <text x="4" y="14.6">2. Kartu wajib dibawa setiap hari selama kegiatan pembelajaran berlangsung.</text>
+            <text x="4" y="17.4">3. Kartu ini tidak boleh dipindahtangankan kepada orang lain.</text>
+            <text x="4" y="20.2">4. Kehilangan kartu wajib segera dilaporkan kepada Wali Kelas/Kesiswaan.</text>
+            <text x="4" y="23.0">5. Kartu yang rusak atau hilang dapat diganti sesuai ketentuan sekolah.</text>
+            <text x="4" y="25.8">6. QR Code pada kartu digunakan sebagai identitas digital siswa &amp; tidak boleh dirusak.</text>
+            <text x="4" y="28.6">7. Penyalahgunaan kartu pelajar akan dikenakan sanksi sesuai tata tertib sekolah.</text>
+          </g>
+
+          <!-- Footer Alamat Sekolah -->
+          <rect x="4" y="31.2" width="79.6" height="6.2" rx="1" fill="rgba(255,255,255,0.08)"/>
+          <text x="43.8" y="33.4" text-anchor="middle" font-size="1.7" class="txt-bold" fill="#ffffff">SMK NEGERI 1 MEPANGA</text>
+          <text x="43.8" y="35.7" text-anchor="middle" font-size="1.3" fill="#ffffff">Jl. Nusantara No.116 Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong, Sulawesi Tengah</text>
+
+          <!-- Digital QR Code -->
+          <rect x="38.8" y="39.5" width="10" height="10" rx="1" fill="#ffffff"/>
+          <image href="${qrUrl}" x="39.3" y="40.0" width="9" height="9" preserveAspectRatio="xMidYMid meet"/>
+        </g>
+      </g>\n`;
+    });
+
+    svgContent += `</svg>`;
+
+    // DOWNLOAD OTOMATIS PER HALAMAN A4
+    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = `Kartu_Pelajar_${filterKelas.toUpperCase()}_Hal_${pageIdx + 1}.svg`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+  }
 }
 
 function aksiBukaJendelaCetak(siswaId) {
@@ -15958,7 +16175,9 @@ function renderDataIndukSiswa() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
 
-  const listSiswa = DB.siswa || [];
+  // Cek Role & Kelas Pengguna Saat Ini
+  const isSekretaris = currentUser && (currentUser.role === 'sekretaris' || currentUser.role === 'sekre');
+  const myKelas = currentUser ? (currentUser.kelas || '') : '';
 
   mc.innerHTML = `
     <div class="fade-in p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -15984,14 +16203,22 @@ function renderDataIndukSiswa() {
           placeholder="Cari berdasarkan nama atau NISN..." 
           class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm flex-1 min-w-[200px]"
         >
-        <select 
-          id="filterKelasInduk" 
-          onchange="filterDataIndukSiswa()" 
-          class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"
-        >
-          <option value="">Semua Kelas</option>
-          ${(DB.kelas || []).map(k => `<option value="${k}">${k}</option>`).join('')}
-        </select>
+        
+        ${isSekretaris ? `
+          <!-- Jika Sekretaris: Kunci Kelasnya & Kunci Dropdown -->
+          <input type="hidden" id="filterKelasInduk" value="${myKelas}">
+          <input type="text" value="Kelas: ${myKelas}" disabled class="px-4 py-2 border rounded-xl bg-gray-100 dark:bg-gray-600 dark:border-gray-600 text-sm font-semibold text-gray-600 dark:text-gray-200 cursor-not-allowed">
+        ` : `
+          <!-- Jika Admin/Kesiswaan: Bebas Pilih Kelas -->
+          <select 
+            id="filterKelasInduk" 
+            onchange="filterDataIndukSiswa()" 
+            class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"
+          >
+            <option value="">Semua Kelas</option>
+            ${(DB.kelas || []).map(k => `<option value="${k}">${k}</option>`).join('')}
+          </select>
+        `}
       </div>
 
       <!-- Tabel Daftar Siswa -->
@@ -16019,20 +16246,26 @@ function renderDataIndukSiswa() {
   filterDataIndukSiswa();
 }
 
-// Fungsi Filter & Render Tabel Data Induk
 function filterDataIndukSiswa() {
   const search = (document.getElementById('searchInduk')?.value || '').toLowerCase().trim();
-  const kelas = document.getElementById('filterKelasInduk')?.value || '';
   const body = document.getElementById('bodyDataInduk');
 
   if (!body) return;
 
+  const isSekretaris = currentUser && (currentUser.role === 'sekretaris' || currentUser.role === 'sekre');
+  const myKelas = currentUser ? (currentUser.kelas || '') : '';
+
+  // 1. Ambil nilai filter kelas
+  const kelas = isSekretaris ? myKelas : (document.getElementById('filterKelasInduk')?.value || '');
+
   let list = [...(DB.siswa || [])];
 
+  // 2. Filter berdasarkan Kelas
   if (kelas) {
-    list = list.filter(s => String(s.kelas || '').trim() === kelas.trim());
+    list = list.filter(s => String(s.kelas || '').trim().toLowerCase() === kelas.trim().toLowerCase());
   }
 
+  // 3. Filter berdasarkan Pencarian
   if (search) {
     list = list.filter(s => 
       String(s.nama || '').toLowerCase().includes(search) || 
@@ -16046,7 +16279,6 @@ function filterDataIndukSiswa() {
   }
 
   body.innerHTML = list.map((s, idx) => {
-    // Relasi dengan DB.kelengkapanData berdasarkan siswaId
     const kData = (DB.kelengkapanData || []).find(k => String(k.siswaId) === String(s.id)) || {};
     const foto = kData.foto || s.pasFoto || '';
     const lengkap = !!(kData.tempatLahir && kData.tanggalLahir && kData.alamat);
