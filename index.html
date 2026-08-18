@@ -582,13 +582,14 @@ async function simpanDataKeStorage(node) {
     kreditPoin: DB.kreditPoin,
     kreditPoinMaster: DB.kreditPoinMaster,
     riwayatTindakan: DB.riwayatTindakan,
+    penebusan_poin: DB.penebusan_poin || [], // 🟢 Tambahkan ini
     bimbingan: DB.bimbingan,
     kelengkapanData: DB.kelengkapanData,
     auditLog: DB.auditLog,
     identitas: DB.identitas,
     libur: DB.libur,
-    jadwalKesiswaan: DB.jadwalKesiswaan, // 🟢 TAMBAHKAN
-    catatanKesiswaan: DB.catatanKesiswaan  // 🟢 TAMBAHKAN
+    jadwalKesiswaan: DB.jadwalKesiswaan,
+    catatanKesiswaan: DB.catatanKesiswaan
   };
 
   if (!(node in dataNode)) {
@@ -598,24 +599,6 @@ async function simpanDataKeStorage(node) {
 
   await targetDb.ref("kesiswaan_cloud/" + node).set(dataNode[node]);
   return true;
-}
-
-async function simpanKehadiranKelas(tanggal, kelas, dataKelas) {
-
-  let targetDb = null;
-
-  if (typeof database !== 'undefined') {
-    targetDb = database;
-  } else if (window.firebase && window.firebase.apps.length > 0) {
-    targetDb = window.firebase.apps[0].database();
-  }
-
-  if (!targetDb) return;
-
-  const key = `${tanggal}_${kelas.replace(/\s+/g, "_")}`;
-
-  await targetDb.ref("kesiswaan_cloud/kehadiran/" + key).set(dataKelas);
-
 }
 
 // ==========================================
@@ -8068,8 +8051,8 @@ function renderDashboardKesiswaanBaru() {
     }
 
 // ===================================================================
-    // HAK AKSES ADMIN: REKAP KETIDAKHADIRAN GLOBAL SEMUA KELAS (FIXED)
-    // ===================================================================
+// HAK AKSES ADMIN: REKAP KETIDAKHADIRAN GLOBAL SEMUA KELAS (FIXED)
+// ===================================================================
 function renderRekapKetidakhadiran() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
@@ -8082,7 +8065,10 @@ function renderRekapKetidakhadiran() {
   const tglHariIni = new Date().toISOString().split('T')[0];
   const bulanSekarang = tglHariIni.split('-')[1];
 
-  // 3. Pasang Struktur Layout Dashboard Kontrol Admin (Filter Kelas & Bulan + Tombol Download)
+  // Tentukan semester default berdasarkan bulan berjalan (Bulan 07-12 = Semester 1 / Ganjil)
+  const semesterSekarang = parseInt(bulanSekarang) >= 7 ? '1' : '2';
+
+  // 3. Pasang Struktur Layout Dashboard Kontrol Admin (Filter Kelas, Semester, Bulan + Tombol Download)
   mc.innerHTML = `
 <div class="fade-in space-y-4">
   <div class="flex flex-wrap justify-between items-center gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -8096,6 +8082,11 @@ function renderRekapKetidakhadiran() {
       <select id="filterKelasAdminKH" onchange="hitungAbsenAdminGlobal()" class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         <option value="">-- Semua Kelas --</option>
         ${daftarKelas.map(k => `<option value="${k}">Kelas ${k}</option>`).join('')}
+      </select>
+
+      <select id="filterSemesterAdminKH" onchange="hitungAbsenAdminGlobal()" class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="1" ${semesterSekarang === '1' ? 'selected' : ''}>Semester Ganjil (Jul - Des)</option>
+        <option value="2" ${semesterSekarang === '2' ? 'selected' : ''}>Semester Genap (Jan - Jun)</option>
       </select>
 
       <select id="filterBulanAdminKH" onchange="hitungAbsenAdminGlobal()" class="px-4 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -8115,10 +8106,13 @@ function renderRekapKetidakhadiran() {
       </select>
       
       <button onclick="bukaSubMenuRiwayatJurnal()" class="px-3 py-2 bg-gray-800 dark:bg-gray-700 hover:opacity-90 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
-        ⚙️ Riwayat Jurnal & Hapus Tanggal
+        ⚙️ Riwayat Jurnal
       </button>
       <button onclick="unduhRekapBulananAdmin()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
         📅 Rekap Bulanan
+      </button>
+      <button onclick="unduhRekapSemesterAdmin()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+        🎓 Rekap Semester
       </button>
       <button onclick="unduhRekapHarianAdmin()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
         ☀️ Rekap Harian
@@ -8426,96 +8420,74 @@ daftarSiswa.sort((a, b) => {
 // ====================================================
     // 1. FUNGSI CETAK REKAP ABSENSI BULANAN (PRINT VIEW) - DINAMIS
     // ====================================================
+// =========================================================================
+// 1. REKAP BULANAN ADMIN
+// =========================================================================
 function unduhRekapBulananAdmin() {
-      const kelasTerpilih = document.getElementById('filterKelasAdminKH')?.value || '';
-      const bulanTerpilih = document.getElementById('filterBulanAdminKH')?.value || '';
+  const kelasTerpilih = document.getElementById('filterKelasAdminKH')?.value || '';
+  const bulanTerpilih = document.getElementById('filterBulanAdminKH')?.value || '';
 
-      const namaBulanArr = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-      const labelBulan = bulanTerpilih ? namaBulanArr[parseInt(bulanTerpilih) - 1] : "Semua Bulan";
-      const labelKelas = kelasTerpilih ? kelasTerpilih : "Semua Kelas";
+  const namaBulanArr = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const labelBulan = bulanTerpilih ? namaBulanArr[parseInt(bulanTerpilih) - 1] : "Semua Bulan";
+  const labelKelas = kelasTerpilih ? kelasTerpilih : "Semua Kelas";
 
-      let daftarSiswa = [...(DB.siswa || [])];
+  let daftarSiswa = [...(DB.siswa || [])];
+  if (kelasTerpilih) {
+    daftarSiswa = daftarSiswa.filter(s => String(s.kelas).trim() === kelasTerpilih);
+  }
 
-      if (kelasTerpilih) {
-        daftarSiswa = daftarSiswa.filter(s => s.kelas === kelasTerpilih);
-      }
+  daftarSiswa.sort((a, b) => {
+    const kCmp = String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true });
+    if (kCmp !== 0) return kCmp;
+    return String(a.nama || a.name || '').localeCompare(String(b.nama || b.name || ''), 'id');
+  });
 
-      // ===========================
-      // URUTKAN KELAS → NAMA
-      // ===========================
-      daftarSiswa.sort((a, b) => {
-        const kelas = a.kelas.localeCompare(
-          b.kelas,
-          'id',
-          { numeric: true }
-        );
-        if (kelas !== 0) return kelas;
-        return a.nama.localeCompare(b.nama, 'id');
-      });
+  if (daftarSiswa.length === 0) {
+    if (typeof showToast === 'function') showToast('Tidak ada data siswa untuk dicetak', 'error');
+    else alert('Tidak ada data siswa untuk dicetak');
+    return;
+  }
 
-      if (daftarSiswa.length === 0) {
-        showToast('Tidak ada data siswa untuk dicetak', 'error');
-        return;
-      }
+  let seluruhLogKehadiran = DB.kehadiran || [];
+  let logBulanIni = seluruhLogKehadiran;
+  if (bulanTerpilih) {
+    const formatBulan = String(bulanTerpilih).padStart(2, '0');
+    logBulanIni = seluruhLogKehadiran.filter(k => k.tanggal && k.tanggal.split('-')[1] === formatBulan);
+  }
 
-      // ----------------------------------------------------
-      // HITUNG HARI EFEKTIF GLOBAL BERDASARKAN TOTAL TANGGAL UNIK DI BULAN INI
-      // ----------------------------------------------------
-      let seluruhLogKehadiran = DB.kehadiran || [];
-      
-      let logBulanIni = seluruhLogKehadiran;
-      if (bulanTerpilih) {
-        logBulanIni = seluruhLogKehadiran.filter(k => k.tanggal && k.tanggal.split('-')[1] === bulanTerpilih);
-      }
+  const daftarTanggalUnikGlobal = [...new Set(logBulanIni.map(k => k.tanggal).filter(Boolean))];
 
-      // Ambil daftar tanggal unik global (milik semua kelas yang sudah pernah menginput di bulan ini)
-      const daftarTanggalUnikGlobal = [...new Set(logBulanIni.map(k => k.tanggal).filter(Boolean))];
+  if (daftarTanggalUnikGlobal.length === 0) {
+    if (typeof showToast === 'function') showToast(`Belum ada data absensi pada periode ${labelBulan}!`, 'error');
+    else alert(`Belum ada data absensi pada periode ${labelBulan}!`);
+    return;
+  }
 
-      // Jika belum ada satu pun kelas yang menginput absen di bulan ini -> Tampilkan Error
-      if (daftarTanggalUnikGlobal.length === 0) {
-        showToast(`Belum ada data absensi yang diinput pada periode ${labelBulan}!`, 'error');
-        return;
-      }
+  const hariEfektifGlobal = daftarTanggalUnikGlobal.length;
+  let barisTabelHTML = "";
 
-      // Hari efektif dikunci menggunakan total tanggal unik global
-      const hariEfektifGlobal = daftarTanggalUnikGlobal.length;
-      // ----------------------------------------------------
+  daftarSiswa.forEach((s, index) => {
+    let logAbsenSiswa = logBulanIni.filter(k => String(k.siswaId) === String(s.id));
 
-      let barisTabelHTML = "";
-      daftarSiswa.forEach((s, index) => {
-        // Dapatkan log absen khusus siswa ini di bulan terpilih
-        let logAbsenSiswa = logBulanIni.filter(k => String(k.siswaId) == String(s.id));
+    const skt = logAbsenSiswa.filter(k => ['sakit', 's'].includes(String(k.status || '').toLowerCase().trim())).length;
+    const izn = logAbsenSiswa.filter(k => ['izin', 'i'].includes(String(k.status || '').toLowerCase().trim())).length;
+    let alp = logAbsenSiswa.filter(k => ['alpa', 'a'].includes(String(k.status || '').toLowerCase().trim())).length;
 
-        // Hitung data kehadiran nyata yang tercatat di database
-        const skt = logAbsenSiswa.filter(k => ['sakit', 's'].includes(String(k.status || '').toLowerCase().trim())).length;
-        const izn = logAbsenSiswa.filter(k => ['izin', 'i'].includes(String(k.status || '').toLowerCase().trim())).length;
-        let alp = logAbsenSiswa.filter(k => ['alpa', 'a'].includes(String(k.status || '').toLowerCase().trim())).length;
-        
-        // Ambil tanggal-tanggal yang *sudah diinput* untuk siswa ini
-        const tanggalTerrecordSiswa = logAbsenSiswa.map(k => k.tanggal).filter(Boolean);
+    const tanggalTerrecordSiswa = logAbsenSiswa.map(k => k.tanggal).filter(Boolean);
+    daftarTanggalUnikGlobal.forEach(tgl => {
+      if (!tanggalTerrecordSiswa.includes(tgl)) alp += 1;
+    });
 
-        // LOGIKA AUTOMATIC ALPA: 
-        // Bandingkan dengan tanggal unik global. Jika ada tanggal sekolah yang aktif 
-        // namun siswa ini belum punya record (karena sekretaris kelasnya belum input tanggal itu),
-        // maka otomatis dianggap Alpa 1 kelas penuh untuk hari tersebut.
-        daftarTanggalUnikGlobal.forEach(tgl => {
-          if (!tanggalTerrecordSiswa.includes(tgl)) {
-            alp += 1; 
-          }
-        });
-        
-        // Kalkulasi Akhir
-        const totalTidakHadir = skt + izn + alp;
-        const hadir = Math.max(0, hariEfektifGlobal - totalTidakHadir);
-        const persentase = hariEfektifGlobal > 0 ? ((hadir / hariEfektifGlobal) * 100).toFixed(1) : "0.0";
-        
-        const poin = (alp * 3) + (izn * 1) + (skt * 0.5);
-        const warnaPersen = parseFloat(persentase) < 90.0 ? '#dc2626' : '#059669';
+    const totalTidakHadir = skt + izn + alp;
+    const hadir = Math.max(0, hariEfektifGlobal - totalTidakHadir);
+    const persentase = hariEfektifGlobal > 0 ? ((hadir / hariEfektifGlobal) * 100).toFixed(1) : "0.0";
+    const poin = (alp * 3) + (izn * 1) + (skt * 0.5);
+    const warnaPersen = parseFloat(persentase) < 90.0 ? '#dc2626' : '#059669';
 
-        barisTabelHTML += `
+    barisTabelHTML += `
       <tr>
         <td class="text-center">${index + 1}</td>
-        <td class="text-left font-semibold">${s.nama || s.name}</td>
+        <td class="text-left font-semibold">${s.nama || s.name || '-'}</td>
         <td class="text-center">${s.kelas || '-'}</td>
         <td class="text-center font-medium" style="background-color: #fafafa;">${hariEfektifGlobal} Hari</td>
         <td class="text-center font-semibold" style="color: #059669; background-color: #f0fdf4;">${hadir} Hari</td>
@@ -8526,13 +8498,108 @@ function unduhRekapBulananAdmin() {
         <td class="text-center font-bold" style="color: ${poin > 0 ? '#b91c1c' : '#4b5563'};">${poin} Poin</td>
       </tr>
     `;
-      });
+  });
 
-      const jendelaCetak = window.open('', '_blank');
-      jendelaCetak.document.write(`
+  bukaJendelaCetak(`Rekap Bulanan Absensi - ${labelKelas}`, labelKelas, labelBulan, barisTabelHTML);
+}
+
+// =========================================================================
+// 2. REKAP SEMESTER ADMIN (Ganjil: Jul-Des, Genap: Jan-Jun)
+// =========================================================================
+function unduhRekapSemesterAdmin() {
+  const kelasTerpilih = document.getElementById('filterKelasAdminKH')?.value || '';
+  const semesterTerpilih = document.getElementById('filterSemesterAdminKH')?.value || '1';
+
+  const bulanSemesterMap = {
+    '1': ['07', '08', '09', '10', '11', '12'],
+    'ganjil': ['07', '08', '09', '10', '11', '12'],
+    '2': ['01', '02', '03', '04', '05', '06'],
+    'genap': ['01', '02', '03', '04', '05', '06']
+  };
+
+  const semKey = String(semesterTerpilih).toLowerCase();
+  const bulanValid = bulanSemesterMap[semKey] || bulanSemesterMap['1'];
+  const labelSemester = (semKey === '1' || semKey === 'ganjil') ? "Semester Ganjil (Juli - Desember)" : "Semester Genap (Januari - Juni)";
+  const labelKelas = kelasTerpilih ? kelasTerpilih : "Semua Kelas";
+
+  let daftarSiswa = [...(DB.siswa || [])];
+  if (kelasTerpilih) {
+    daftarSiswa = daftarSiswa.filter(s => String(s.kelas).trim() === kelasTerpilih);
+  }
+
+  daftarSiswa.sort((a, b) => {
+    const kCmp = String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true });
+    if (kCmp !== 0) return kCmp;
+    return String(a.nama || a.name || '').localeCompare(String(b.nama || b.name || ''), 'id');
+  });
+
+  if (daftarSiswa.length === 0) {
+    if (typeof showToast === 'function') showToast('Tidak ada data siswa untuk dicetak', 'error');
+    else alert('Tidak ada data siswa untuk dicetak');
+    return;
+  }
+
+  let logSemesterIni = (DB.kehadiran || []).filter(k => {
+    if (!k.tanggal) return false;
+    const parts = k.tanggal.split('-');
+    return bulanValid.includes(parts[1]);
+  });
+
+  const daftarTanggalUnikGlobal = [...new Set(logSemesterIni.map(k => k.tanggal).filter(Boolean))];
+
+  if (daftarTanggalUnikGlobal.length === 0) {
+    if (typeof showToast === 'function') showToast(`Belum ada data absensi pada ${labelSemester}!`, 'error');
+    else alert(`Belum ada data absensi pada ${labelSemester}!`);
+    return;
+  }
+
+  const hariEfektifGlobal = daftarTanggalUnikGlobal.length;
+  let barisTabelHTML = "";
+
+  daftarSiswa.forEach((s, index) => {
+    let logAbsenSiswa = logSemesterIni.filter(k => String(k.siswaId) === String(s.id));
+
+    const skt = logAbsenSiswa.filter(k => ['sakit', 's'].includes(String(k.status || '').toLowerCase().trim())).length;
+    const izn = logAbsenSiswa.filter(k => ['izin', 'i'].includes(String(k.status || '').toLowerCase().trim())).length;
+    let alp = logAbsenSiswa.filter(k => ['alpa', 'a'].includes(String(k.status || '').toLowerCase().trim())).length;
+
+    const tanggalTerrecordSiswa = logAbsenSiswa.map(k => k.tanggal).filter(Boolean);
+    daftarTanggalUnikGlobal.forEach(tgl => {
+      if (!tanggalTerrecordSiswa.includes(tgl)) alp += 1;
+    });
+
+    const totalTidakHadir = skt + izn + alp;
+    const hadir = Math.max(0, hariEfektifGlobal - totalTidakHadir);
+    const persentase = hariEfektifGlobal > 0 ? ((hadir / hariEfektifGlobal) * 100).toFixed(1) : "0.0";
+    const poin = (alp * 3) + (izn * 1) + (skt * 0.5);
+    const warnaPersen = parseFloat(persentase) < 90.0 ? '#dc2626' : '#059669';
+
+    barisTabelHTML += `
+      <tr>
+        <td class="text-center">${index + 1}</td>
+        <td class="text-left font-semibold">${s.nama || s.name || '-'}</td>
+        <td class="text-center">${s.kelas || '-'}</td>
+        <td class="text-center font-medium" style="background-color: #fafafa;">${hariEfektifGlobal} Hari</td>
+        <td class="text-center font-semibold" style="color: #059669; background-color: #f0fdf4;">${hadir} Hari</td>
+        <td class="text-center">${skt || '-'}</td>
+        <td class="text-center">${izn || '-'}</td>
+        <td class="text-center ${alp > 0 ? 'text-red' : ''}">${alp || '-'}</td>
+        <td class="text-center font-bold" style="color: ${warnaPersen}; background-color: #f0fdf4;">${persentase}%</td>
+        <td class="text-center font-bold" style="color: ${poin > 0 ? '#b91c1c' : '#4b5563'};">${poin} Poin</td>
+      </tr>
+    `;
+  });
+
+  bukaJendelaCetak(`Rekap Semester Absensi - ${labelKelas}`, labelKelas, labelSemester, barisTabelHTML);
+}
+
+// Helper Function Cetak
+function bukaJendelaCetak(judulDokumen, labelKelas, labelPeriode, barisTabelHTML) {
+  const jendelaCetak = window.open('', '_blank');
+  jendelaCetak.document.write(`
     <html>
     <head>
-      <title>Rekap Bulanan Absensi - ${labelKelas}</title>
+      <title>${judulDokumen}</title>
       <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; margin: 0; color: #1f2937; background: white; line-height: 1.4; }
         .kop-surat { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
@@ -8542,42 +8609,31 @@ function unduhRekapBulananAdmin() {
         .kop-alamat { font-size: 11px; font-style: italic; color: #6b7280; }
         .garis-kop { border-bottom: 3px solid #000; padding-top: 5px; position: relative; }
         .garis-kop::after { content: ''; display: block; border-bottom: 1px solid #000; margin-top: 2px; }
-        
         .judul-laporan { text-align: center; font-weight: 700; font-size: 15px; text-transform: uppercase; margin: 25px 0 20px 0; color: #111827; letter-spacing: 0.5px; }
         .sub-judul { font-size: 12px; font-weight: 500; color: #4b5563; text-transform: none; margin-top: 5px; display: block; }
-        
-        .tabel-cetak { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; box-shadow: 0 0 1px rgba(0,0,0,0.5); }
+        .tabel-cetak { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
         .tabel-cetak th { background-color: #f3f4f6; border: 1px solid #9ca3af; padding: 10px 6px; font-weight: 700; text-transform: uppercase; color: #1f2937; font-size: 10px; }
         .tabel-cetak td { border: 1px solid #9ca3af; padding: 8px 6px; color: #374151; }
-        
         .text-center { text-align: center; }
         .text-left { text-align: left; padding-left: 12px !important; }
         .font-semibold { font-weight: 600; }
         .font-bold { font-weight: 700; }
         .font-medium { font-weight: 500; }
         .text-red { color: #dc2626; font-weight: 600; }
-        
         .tabel-ttd { width: 100%; margin-top: 50px; font-size: 12px; border: none; page-break-inside: avoid; }
         .tabel-ttd td { border: none !important; color: #1f2937; }
         .space-ttd { height: 75px; }
-        
         .no-print { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-        .btn-print { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .btn-print:hover { background: #1d4ed8; }
-        
+        .btn-print { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
         @media print { 
           .no-print { display: none; } 
           body { padding: 10px 20px; }
           .tabel-cetak th { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          thead { display: table-header-group; }
         }
       </style>
     </head>
     <body>
-      <div class="no-print">
-        <button class="btn-print" onclick="window.print()">🖨️ Cetak Dokumen</button>
-      </div>
-
+      <div class="no-print"><button class="btn-print" onclick="window.print()">🖨️ Cetak Dokumen</button></div>
       <table class="kop-surat">
         <tr>
           <td class="kop-text">
@@ -8586,16 +8642,12 @@ function unduhRekapBulananAdmin() {
             <span class="kop-alamat">Alamat : Jalan Nusantara No 116, Desa Kayu Agung, Kecamatan Mepanga, Kode Pos 94376</span>
           </td>
         </tr>
-        <tr>
-          <td class="garis-kop"></td>
-        </tr>
+        <tr><td class="garis-kop"></td></tr>
       </table>
-
       <div class="judul-laporan">
-        LAPORAN REKAPITULASI BULANAN KEHADIRAN & ABSENSI SISWA
-        <span class="sub-judul"><b>Kelas:</b> ${labelKelas} &nbsp;|&nbsp; <b>Periode:</b> ${labelBulan}</span>
+        LAPORAN REKAPITULASI KEHADIRAN & ABSENSI SISWA
+        <span class="sub-judul"><b>Kelas:</b> ${labelKelas} &nbsp;|&nbsp; <b>Periode:</b> ${labelPeriode}</span>
       </div>
-
       <table class="tabel-cetak">
         <thead>
           <tr>
@@ -8614,19 +8666,16 @@ function unduhRekapBulananAdmin() {
             <th width="7%" style="background-color: #fffbeb;">Alpa</th>
           </tr>
         </thead>
-        <tbody>
-          ${barisTabelHTML}
-        </tbody>
+        <tbody>${barisTabelHTML}</tbody>
       </table>
-
       <table class="tabel-ttd">
         <tr>
-          <td width="50%" align="center" style="text-align: center; vertical-align: top;">
+          <td width="50%" align="center">
             Mengetahui,<br>Kepala SMKN 1 Mepanga
             <div class="space-ttd"></div>
             <u><b>Joko Sarwono, S.Pd.</b></u><br>NIP. 196610161991031010
           </td>
-          <td width="50%" align="center" style="text-align: center; vertical-align: top;">
+          <td width="50%" align="center">
             Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br>Waka Bidang Kesiswaan
             <div class="space-ttd"></div>
             <u><b>Sinta Dwi Oktavaina, S.Pd.</b></u><br>NIP. 199810262022212002
@@ -8636,9 +8685,9 @@ function unduhRekapBulananAdmin() {
     </body>
     </html>
   `);
-      jendelaCetak.document.close();
-      showToast('Jendela cetak bulanan berhasil dibuka', 'success');
-    }
+  jendelaCetak.document.close();
+  if (typeof showToast === 'function') showToast('Jendela cetak berhasil dibuka', 'success');
+}
 
     // ====================================================
     // 2. FUNGSI CETAK REKAP ABSENSI HARIAN (PRINT VIEW)
@@ -9524,7 +9573,6 @@ function renderIsiModalLibur() {
         <button onclick="tutupModalLibur()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold">&times;</button>
       </div>
 
-      <!-- FORM TAMBAH -->
       <div class="space-y-3 bg-gray-50 dark:bg-gray-700/40 p-3 rounded-xl border border-gray-200 dark:border-gray-600">
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tanggal Non-Efektif</label>
@@ -9539,7 +9587,6 @@ function renderIsiModalLibur() {
         </button>
       </div>
 
-      <!-- DAFTAR LIBUR -->
       <div class="max-h-48 overflow-y-auto space-y-2 pr-1">
         <p class="text-xs font-bold text-gray-500">Daftar Hari Non-Efektif Tersimpan:</p>
         ${listLibur.length === 0 ? '<p class="text-xs text-gray-400 italic">Belum ada hari libur ditambahkan.</p>' : ''}
@@ -9564,52 +9611,67 @@ function renderIsiModalLibur() {
 }
 
 async function simpanHariLibur() {
-  const tgl = document.getElementById('inputTglLibur')?.value;
-  const ket = document.getElementById('inputKetLibur')?.value || 'Hari Non-Efektif';
+  const tglInput = document.getElementById('inputTglLibur');
+  const ketInput = document.getElementById('inputKetLibur');
+  const tgl = (tglInput?.value || '').trim();
+  const ket = (ketInput?.value || '').trim() || 'Hari Non-Efektif';
 
   if (!tgl) {
-    alert("Pilih tanggal terlebih dahulu!");
+    if (typeof showToast === 'function') showToast('⚠️ Pilih tanggal terlebih dahulu!', 'error');
+    else alert("Pilih tanggal terlebih dahulu!");
     return;
   }
 
-  DB.libur = DB.libur || [];
-  if (DB.libur.some(x => x && x.tanggal === tgl)) {
-    alert("Tanggal ini sudah terdaftar sebagai hari libur!");
+  DB.libur = Array.isArray(DB.libur) ? DB.libur : [];
+
+  if (DB.libur.some(x => x && String(x.tanggal).trim() === tgl)) {
+    if (typeof showToast === 'function') showToast('⚠️ Tanggal ini sudah terdaftar sebagai hari libur!', 'error');
+    else alert("Tanggal ini sudah terdaftar sebagai hari libur!");
     return;
   }
 
-  // Push data baru (tambahkan ID unik agar konsisten)
+  // Push data baru
   DB.libur.push({ 
-    id: Date.now(), 
+    id: 'LIB_' + Date.now(), 
     tanggal: tgl, 
     keterangan: ket 
   });
 
-  // 1. SIMPAN KE LOCALSTORAGE
-  localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
-
-  // 2. SIMPAN KE FIREBASE DATABASE
+  // 1. SIMPAN KE LOCALSTORAGE (Instan)
   try {
-    if (typeof simpanDataKeStorage === 'function') {
-      await simpanDataKeStorage('libur');
-    } else if (typeof simpanDataKeCloud === 'function') {
-      simpanDataKeCloud('libur', DB.libur);
-    }
-  } catch (error) {
-    console.error("Gagal menyimpan ke Firebase:", error);
+    localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
+    localStorage.setItem('sik_libur', JSON.stringify(DB.libur));
+  } catch (e) {
+    console.error("Gagal simpan ke LocalStorage:", e);
   }
 
-  // 3. REFRESH TAMPILAN & FORM
-  if (typeof renderIsiModalLibur === 'function') renderIsiModalLibur();
+  // 2. RESET INPUT & REFRESH TAMPILAN SAKAN ITU JUGA
+  if (tglInput) tglInput.value = '';
+  if (ketInput) ketInput.value = '';
+
+  renderIsiModalLibur();
   if (typeof generateMatrixAbsenBulanan === 'function') generateMatrixAbsenBulanan();
+  if (typeof renderRekapKetidakhadiran === 'function') renderRekapKetidakhadiran();
 
-  // Reset input form setelah berhasil
-  const inputTgl = document.getElementById('inputTglLibur');
-  const inputKet = document.getElementById('inputKetLibur');
-  if (inputTgl) inputTgl.value = '';
-  if (inputKet) inputKet.value = '';
+  // Toast Notifikasi
+  if (typeof showToast === 'function') {
+    showToast('✅ Hari non-efektif berhasil disimpan!', 'success');
+  }
 
-  alert("Hari non-efektif berhasil disimpan!");
+  // 3. SIMPAN KE FIREBASE (Background Process / Non-blocking)
+  try {
+    if (typeof simpanDataKeStorage === 'function') {
+      simpanDataKeStorage('libur').catch(err => console.warn("Firebase sync err:", err));
+    }
+    if (typeof simpanDataKeCloud === 'function') {
+      simpanDataKeCloud('libur', DB.libur);
+    }
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      firebase.database().ref('kesiswaan_cloud/libur').set(DB.libur);
+    }
+  } catch (error) {
+    console.error("Gagal menginisiasi sinkronisasi ke Firebase:", error);
+  }
 }
 
 function hapusHariLibur(index) {
@@ -9617,14 +9679,29 @@ function hapusHariLibur(index) {
     DB.libur.splice(index, 1);
 
     // 1. SIMPAN PERUBAHAN KE LOCALSTORAGE
-    localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
+    try {
+      localStorage.setItem('DB_KESISWAAN', JSON.stringify(DB));
+      localStorage.setItem('sik_libur', JSON.stringify(DB.libur));
+    } catch (e) {
+      console.error("Gagal simpan ke LocalStorage:", e);
+    }
 
-    // 2. Panggil fungsi simpan global jika ada
-    if (typeof simpanDB === 'function') simpanDB();
-    if (typeof simpanDataKeCloud === 'function') simpanDataKeCloud('libur', DB.libur);
-
+    // 2. REFRESH UI
     renderIsiModalLibur();
     if (typeof generateMatrixAbsenBulanan === 'function') generateMatrixAbsenBulanan();
+    if (typeof renderRekapKetidakhadiran === 'function') renderRekapKetidakhadiran();
+
+    // 3. SIMPAN KE FIREBASE / CLOUD (Background process)
+    try {
+      if (typeof simpanDB === 'function') simpanDB();
+      if (typeof simpanDataKeStorage === 'function') simpanDataKeStorage('libur');
+      if (typeof simpanDataKeCloud === 'function') simpanDataKeCloud('libur', DB.libur);
+      if (typeof firebase !== 'undefined' && firebase.database) {
+        firebase.database().ref('kesiswaan_cloud/libur').set(DB.libur);
+      }
+    } catch (err) {
+      console.warn("Gagal sinkronisasi hapus libur:", err);
+    }
   }
 }
 
@@ -9637,8 +9714,10 @@ function tutupModalLibur() {
 function cekKeteranganLibur(tanggalString) {
   if (!tanggalString) return null;
 
+  const tglClean = String(tanggalString).trim();
+
   // Ubah YYYY-MM-DD menjadi YYYY/MM/DD agar dibaca sebagai waktu lokal
-  const dateObj = new Date(tanggalString.replace(/-/g, '/'));
+  const dateObj = new Date(tglClean.replace(/-/g, '/'));
   const dayOfWeek = dateObj.getDay(); // 0 = Minggu, 6 = Sabtu
 
   if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -9646,7 +9725,7 @@ function cekKeteranganLibur(tanggalString) {
   }
 
   if (Array.isArray(DB.libur) && DB.libur.length > 0) {
-    const itemLibur = DB.libur.find(l => l.tanggal === tanggalString);
+    const itemLibur = DB.libur.find(l => l && String(l.tanggal).trim() === tglClean);
     if (itemLibur) {
       return { isLibur: true, ket: itemLibur.keterangan || "Hari Libur Sekolah" };
     }
@@ -14928,6 +15007,16 @@ function aksiBukaJendelaCetakMassal(filterKelas = "SEMUA") {
   const capStempelBase64 = DB.identitas?.capSekolah || ""; 
   const ttdKepsekBase64 = DB.identitas?.ttdKepsek || ""; 
 
+  // Fungsi pembantu untuk mengubah teks menjadi Capitalize Each Word (Title Case)
+  const toTitleCase = (str) => {
+    if (!str || str === '-') return '-';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   // Fungsi pembantu format tanggal lahir Indonesia (DD Nama_Bulan YYYY)
   const formatTanggalLahirIndonesia = (tglStr) => {
     if (!tglStr || tglStr === '-') return '-';
@@ -14941,7 +15030,7 @@ function aksiBukaJendelaCetakMassal(filterKelas = "SEMUA") {
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
       ];
       const idxBulan = parseInt(bulan, 10) - 1;
-      if (idxBulan >= 0 && idxBulan < 12) return `${tanggal} ${namaBulan[idxBulan]} ${tahun}`;
+      if (idxBulan >= 0 && idxBulan < 12) return `${tanggal} ${namaBulan[idxBulan]}` + " " + tahun;
     }
     return tglStr;
   };
@@ -14979,13 +15068,26 @@ body{
     width: 100%;
 }
 
+/* CONTAINER PEMBUNGKUS PER HALAMAN A4 */
+.page-a4 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 6mm 0;
+    gap: 3.5mm;
+    box-sizing: border-box;
+    page-break-after: always;
+    page-break-inside: avoid;
+}
+
 .baris-kartu{
     display:flex;
     justify-content:center;
-    gap:4mm; 
+    gap: 8mm;
     width:100%;
     page-break-inside:avoid;
-    margin-bottom:1mm; /* Jarak vertikal dipersempit menjadi 1mm agar pas 5 kartu berukuran besar */
 }
 
 /*=========================================================
@@ -15061,9 +15163,8 @@ HEADER / KOP SEKOLAH
     align-items:center;
     justify-content:space-between;
     background:white;
-    padding:5px 7px; /* Menyesuaikan padding kartu yang lebih besar */
-    height:15.5mm;
-    clip-path:polygon(0 0,100% 0,100% 88%,0 100%);
+    padding:4px 7px 2px 7px;
+    height:15mm;
     z-index:20;
 }
 .kop-sekolah img{
@@ -15080,21 +15181,26 @@ HEADER / KOP SEKOLAH
     font-size:5.2pt;
     font-weight:800;
     color:#1e293b;
+    line-height:1.1;
 }
 .kop-text h4{
     font-size:5.2pt;
     font-weight:700;
     color:#334155;
+    line-height:1.1;
 }
 .kop-text h2{
-    font-size:11.5pt;
+    font-size:11pt;
     font-weight:900;
     letter-spacing:.5px;
     color:#0f172a;
+    line-height:1.1;
 }
 .kop-text p{
-    font-size:4.2pt;
+    font-size:4.8pt;
     color:#475569;
+    line-height:1.15;
+    margin-top:1px;
 }
 
 /*=========================================================
@@ -15105,8 +15211,6 @@ JUDUL KARTU
     background:white;
     text-align:center;
     padding:2px 0;
-    border-top:2px solid #1976d2;
-    border-bottom:2px solid #1976d2;
     z-index:15;
 }
 .sub-title span{
@@ -15122,7 +15226,7 @@ AREA DATA UTAMA
 .area-konten{
     display:flex;
     gap:8px;
-    padding:7px 9px; /* Menyesuaikan pelebaran kartu */
+    padding:7px 9px;
     position:relative;
     z-index:10;
 }
@@ -15183,7 +15287,7 @@ TABEL DATA SISWA
     text-align:center;
 }
 .val{
-    font-weight:800;
+    font-weight:700;
     color:#111827;
 }
 
@@ -15192,29 +15296,40 @@ TANDA TANGAN & STEMPEL
 =========================================================*/
 .area-ttd-kepsek{
     position:absolute;
-    bottom:10px; /* Digeser naik sedikit */
-    right:10px;
-    width:32mm;
+    bottom:22px;
+    right:6px;
     text-align:center;
-    font-size:5pt;
-    color:#111827;
-    z-index:20;
+    font-size:4.8pt;
+    width:28mm;
+    line-height:1.1;
+    z-index:40;
+    color:#000000;
 }
 .wrapper-ttd{
     position:relative;
-    height:8mm;
+    height:6mm;
     display:flex;
     justify-content:center;
     align-items:center;
+    margin:1px 0;
 }
 .img-cap{
     position:absolute;
-    height:11mm;
+    height:10mm;
     opacity:.85;
-    left:0;
+    left:-3px;
+    top:50%;
+    transform:translateY(-50%);
+    mix-blend-mode:multiply;
+    z-index:11;
 }
 .img-ttd{
-    height:7mm;
+    max-height:12mm;
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    mix-blend-mode:multiply;
+    z-index:12;
 }
 
 /*=========================================================
@@ -15259,28 +15374,51 @@ KARTU BAGIAN BELAKANG
 /*=========================================================
 KONFIGURASI CETAK OTOMATIS (PRINTER MEDIA)
 =========================================================*/
-@page{
-    size:A4 portrait;
-    margin:5mm 0mm; /* Menyesuaikan batas margin atas bawah agar tetap muat pas 5 kartu besar */
+@page {
+    size: A4 portrait;
+    margin: 0; /* Set margin kertas printer menjadi 0 */
 }
 
-@media print{
-    body{
-        background:white;
-        padding:0;
-        margin:0;
+@media print {
+    html, body {
+        width: 210mm;
+        height: 297mm;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
-    .kartu-id{
-        box-shadow:none !important;
-        border:1px solid #cbd5e1 !important; 
-    }
+
     .btn-print-action,
-    .info-cetak{
-        display:none !important;
+    .info-cetak {
+        display: none !important;
     }
-    /* Paksa ganti lembar kertas baru setiap kelipatan 5 baris */
-    .baris-kartu:nth-child(5n) {
-        page-break-after: always;
+
+    .container-cetak-massal {
+        width: 210mm;
+    }
+
+    .page-a4 {
+        width: 210mm !important;
+        height: 297mm !important; /* Paksa tinggi tepat 297mm */
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        padding: 4mm 0 !important;   /* Kurangi padding dari 6mm ke 4mm */
+        gap: 2.5mm !important;       /* Perketat gap antar kartu dari 3.5mm ke 2.5mm */
+        box-sizing: border-box !important;
+        page-break-after: always !important;
+        page-break-inside: avoid !important;
+        overflow: hidden !important; /* Mencegah elemen melimpah ke halaman baru */
+    }
+
+    .baris-kartu {
+        gap: 6mm !important; /* Sesuaikan gap horizontal agar aman dari margin samping */
+    }
+
+    .kartu-id {
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 }
 
@@ -15309,110 +15447,123 @@ KONFIGURASI CETAK OTOMATIS (PRINTER MEDIA)
   <div class="container-cetak-massal">
 `);
 
-daftarSiswa.forEach((siswa, index) => {
-    const kls = (siswa.kelas || '').toUpperCase();
-    const tahunSekarang = new Date().getFullYear();
-    let tahunLulus = tahunSekarang;
-    if (kls.includes('XII'))      tahunLulus += 1;
-    else if (kls.includes('XI'))  tahunLulus += 2;
-    else if (kls.includes('X'))   tahunLulus += 3;
-    else                          tahunLulus += 3;
+  // PROSES PEMBAGIAN PER 5 KARTU KE DALAM LEMBAR A4 SEPARAT
+  const KARTU_PER_HALAMAN = 5;
+  for (let i = 0; i < daftarSiswa.length; i += KARTU_PER_HALAMAN) {
+    const kelompokSiswa = daftarSiswa.slice(i, i + KARTU_PER_HALAMAN);
 
-    const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(siswa.id));
+    win.document.write(`<div class="page-a4">`);
 
-    const fotoSiswa = kData && kData.foto ? kData.foto : (siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto");
-    const alamat = kData && kData.alamat ? kData.alamat : (siswa.alamat || '-');
-    const tglLahirTerformat = formatTanggalLahirIndonesia(kData && kData.tanggalLahir ? kData.tanggalLahir : siswa.tanggalLahir);
-    const tempatLahir = kData && kData.tempatLahir ? kData.tempatLahir : (siswa.tempatLahir || '-');
-    const ttl = tempatLahir + ', ' + tglLahirTerformat;
-    
-    // 🔥 PR 1: KONVERSI OTOMATIS JENIS KELAMIN (MASSAL)
-    const jkMentah = (siswa.jk || siswa.jenisKelamin || '').toUpperCase();
-    const jkTerformat = jkMentah === 'L' ? 'Laki-laki' : (jkMentah === 'P' ? 'Perempuan' : '-');
+    kelompokSiswa.forEach((siswa) => {
+        const kls = (siswa.kelas || '').toUpperCase();
+        const tahunSekarang = new Date().getFullYear();
+        let tahunLulus = tahunSekarang;
+        if (kls.includes('XII'))      tahunLulus += 1;
+        else if (kls.includes('XI'))  tahunLulus += 2;
+        else if (kls.includes('X'))   tahunLulus += 3;
+        else                          tahunLulus += 3;
 
-    // 🔥 PR 2 & 3: JURUSAN DI BAWAH TTL (MASSAL)
-    let jurusan = "-";
-    if (kls.includes("TKJ"))       jurusan = "Teknik Komputer dan Jaringan";
-    else if (kls.includes("AKL"))  jurusan = "Akuntansi dan Keuangan Lembaga";
-    else if (kls.includes("BDP"))  jurusan = "Pemasaran";
-    else if (kls.includes("ATPH")) jurusan = "Agribisnis Tanaman Pangan dan Hortikultura";
-    else                           jurusan = kls;
+        const kData = (DB.kelengkapanData || []).find(d => String(d.siswaId) === String(siswa.id));
 
-    win.document.write(`
-  <div class="baris-kartu">
-    <!-- KARTU BAGIAN DEPAN -->
-    <div class="kartu-id" style="position: relative; overflow: hidden; background: #fff;">
-        <div class="bg-strip1"></div><div class="bg-strip2"></div><div class="bg-strip3"></div><div class="bg-circle1"></div><div class="bg-circle2"></div>
-        <img src="${logoSekolahBase64}" class="watermark-logo" style="position: absolute; top: 58%; left: 50%; transform: translate(-50%, -45%); width: 34mm; height: 34mm; opacity: 0.12; z-index: 1; pointer-events: none; object-fit: contain;">
-        <div class="kop-sekolah" style="z-index: 10; position: relative; border-bottom: none; padding-bottom: 2px; height: 13mm;">
-            <img src="${logoProvinsiBase64}"><div class="kop-text"><h3>PEMERINTAH PROVINSI SULAWESI TENGAH</h3><h4>DINAS PENDIDIKAN</h4><h2>SMK NEGERI 1 MEPANGA</h2><p style="margin-bottom: 2px;">Jalan Nusantara No.116 Kayu Agung, Kecamatan Mepanga</p></div><img src="${logoSekolahBase64}">
-        </div>
-        <div style="z-index: 10; position: relative; margin: 0 6px; box-sizing: border-box; border-bottom: 1.8px solid #000; border-top: 0.6px solid #000; height: 3px;"></div>
-        <div class="sub-title" style="z-index: 10; position: relative; border: none; padding: 2px 0 3px 0; text-align: center; margin-top: 1px;">
-            <span style="font-size: 8.5pt; font-weight: 800; color: #1e3a8a; letter-spacing: 1.5px; border-bottom: 1.5px solid #1e3a8a; padding-bottom: 0.5px; text-transform: uppercase;">KARTU PELAJAR</span>
-        </div>
-        <div class="area-konten" style="display: flex; padding: 1px 8px; gap: 8px; height: calc(55.98mm - 21.5mm); position: relative; z-index: 5; align-items: flex-start;">
-            <div class="sisi-kiri" style="display: flex; flex-direction: column; align-items: center; width: 19mm; flex-shrink: 0; position: relative; z-index: 10; gap: 3px; margin-top: 3px;">
-                <img src="${fotoSiswa}" class="foto-frame" style="width: 19mm; height: 24mm; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"><div style="background: #16a34a; color: white; font-size: 4.2pt; padding: 1px 5px; border-radius: 10px; font-weight: 700; text-align: center; width: fit-content; line-height: 1; letter-spacing: 0.3px;">AKTIF</div>
+        const fotoSiswa = kData && kData.foto ? kData.foto : (siswa.pasFoto || siswa.foto || "https://via.placeholder.com/150?text=No+Foto");
+        
+        // Format Alamat otomatis Title Case (Capitalize Each Word)
+        const alamatRaw = kData && kData.alamat ? kData.alamat : (siswa.alamat || '-');
+        const alamat = toTitleCase(alamatRaw);
+
+        // Format TTL (Tempat Lahir diubah ke Title Case, Tanggal menggunakan format tanggal Indonesia)
+        const tglLahirTerformat = formatTanggalLahirIndonesia(kData && kData.tanggalLahir ? kData.tanggalLahir : siswa.tanggalLahir);
+        const tempatLahirRaw = kData && kData.tempatLahir ? kData.tempatLahir : (siswa.tempatLahir || '-');
+        const tempatLahir = toTitleCase(tempatLahirRaw);
+        const ttl = tempatLahir + ', ' + tglLahirTerformat;
+        
+        const jkMentah = (siswa.jk || siswa.jenisKelamin || '').toUpperCase();
+        const jkTerformat = jkMentah === 'L' ? 'Laki-laki' : (jkMentah === 'P' ? 'Perempuan' : '-');
+
+        let jurusan = "-";
+        if (kls.includes("TKJ"))       jurusan = "Teknik Komputer dan Jaringan";
+        else if (kls.includes("AKL"))  jurusan = "Akuntansi dan Keuangan Lembaga";
+        else if (kls.includes("BDP"))  jurusan = "Pemasaran";
+        else if (kls.includes("ATPH")) jurusan = "Agribisnis Tanaman Pangan dan Hortikultura";
+        else                           jurusan = kls;
+
+        win.document.write(`
+      <div class="baris-kartu">
+        <!-- KARTU BAGIAN DEPAN -->
+        <div class="kartu-id" style="position: relative; overflow: hidden; background: #fff;">
+            <div class="bg-strip1"></div><div class="bg-strip2"></div><div class="bg-strip3"></div><div class="bg-circle1"></div><div class="bg-circle2"></div>
+            <img src="${logoSekolahBase64}" class="watermark-logo" style="position: absolute; top: 58%; left: 50%; transform: translate(-50%, -45%); width: 34mm; height: 34mm; opacity: 0.12; z-index: 1; pointer-events: none; object-fit: contain;">
+            <div class="kop-sekolah" style="z-index: 10; position: relative; border-bottom: none;">
+                <img src="${logoProvinsiBase64}"><div class="kop-text"><h3>PEMERINTAH PROVINSI SULAWESI TENGAH</h3><h4>DINAS PENDIDIKAN</h4><h2>SMK NEGERI 1 MEPANGA</h2><p>Jalan Nusantara No.116 Kayu Agung, Kecamatan Mepanga</p></div><img src="${logoSekolahBase64}">
             </div>
-            <div class="sisi-kanan" style="flex-grow: 1; z-index: 5; margin-top: 5px;">
-                <div style="display: flex; flex-direction: column; gap: 2.5px; font-size: 5.5pt; line-height: 1.15; color: #1e293b;">
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">Nama</span><span style="text-align: center; color: #475569;">:</span><span style="color: #0057b8; font-weight: 800; text-transform: uppercase; white-space: nowrap; font-size: 5.5pt;">${siswa.nama}</span></div>
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">NISN</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${siswa.nisn || '-'}</span></div>
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">TTL</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${ttl}</span></div>
-                    <!-- JURUSAN DI BAWAH TTL -->
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">Jurusan</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; color: #0f172a; font-size: 4.9pt; line-height: 1.2;">${jurusan}</span></div>
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">JK</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${jkTerformat}</span></div>
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">Alamat</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 600; color: #0f172a; white-space: nowrap;">${alamat}</span></div>
-                    <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="font-weight: 600; color: #475569;">Berlaku</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; color: #0f172a; white-space: nowrap;">s/d ${tahunLulus}</span></div>
+            <div style="z-index: 10; position: relative; margin: 0 6px; box-sizing: border-box; border-bottom: 1.8px solid #000; border-top: 0.6px solid #000; height: 3px;"></div>
+            <div class="sub-title" style="z-index: 10; position: relative; border: none; padding: 2px 0 3px 0; text-align: center; margin-top: 1px;">
+                <span style="font-size: 8.5pt; font-weight: 800; color: #1e3a8a; letter-spacing: 1.5px; border-bottom: 1.5px solid #1e3a8a; padding-bottom: 0.5px; text-transform: uppercase;">KARTU PELAJAR</span>
+            </div>
+            <div class="area-konten" style="display: flex; padding: 1px 8px; gap: 8px; height: calc(55.98mm - 21.5mm); position: relative; z-index: 5; align-items: flex-start;">
+                <div class="sisi-kiri" style="display: flex; flex-direction: column; align-items: center; width: 19mm; flex-shrink: 0; position: relative; z-index: 10; gap: 3px; margin-top: 3px;">
+                    <img src="${fotoSiswa}" class="foto-frame" style="width: 19mm; height: 24mm; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"><div style="background: #16a34a; color: white; font-size: 4.2pt; padding: 1px 5px; border-radius: 10px; font-weight: 700; text-align: center; width: fit-content; line-height: 1; letter-spacing: 0.3px;">AKTIF</div>
+                </div>
+                <div class="sisi-kanan" style="flex-grow: 1; z-index: 5; margin-top: 5px;">
+                    <div style="display: flex; flex-direction: column; gap: 2.5px; font-size: 5.5pt; line-height: 1.15; color: #0f172a; font-weight: 700;">
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">Nama</span><span style="text-align: center; color: #475569;">:</span><span style="color: #0057b8; font-weight: 800; text-transform: uppercase; white-space: nowrap; font-size: 5.5pt;">${siswa.nama}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">NISN</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; white-space: nowrap;">${siswa.nisn || '-'}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">TTL</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; white-space: nowrap;">${ttl}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">Jurusan</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; font-size: 5.5pt; line-height: 1.15;">${jurusan}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">JK</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; white-space: nowrap;">${jkTerformat}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">Alamat</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; white-space: nowrap;">${alamat}</span></div>
+                        <div style="display: grid; grid-template-columns: 10mm 2mm 1fr; align-items: start;"><span style="color: #475569; font-weight: 700;">Berlaku</span><span style="text-align: center; color: #475569;">:</span><span style="font-weight: 700; white-space: nowrap;">s/d ${tahunLulus}</span></div>
+                    </div>
+                </div>
+                <div class="area-ttd-kepsek">
+                    <div style="font-weight: 500; margin-top: 1px; color: #000000;">Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    <div style="margin-top: 1px; font-weight: 600; color: #000000;">Kepala Sekolah,</div>
+                    <div class="wrapper-ttd">
+                        ${ capStempelBase64 ? `<img src="${capStempelBase64}" class="img-cap">` : '' }
+                        ${ ttdKepsekBase64 ? `<img src="${ttdKepsekBase64}" class="img-ttd">` : '' }
+                    </div>
+                    <div style="font-weight: 800; font-size: 5.6pt; color: #000000; text-decoration: underline; line-height: 1; position: relative; z-index: 13; margin-top: 1px;">${namaKepsek}</div>
+                    <div style="font-size: 4.8pt; font-weight: 600; color: #1e293b; line-height: 1; margin-top: 1px; position: relative; z-index: 13;">NIP. ${nipKepsek.replace('NIP.', '').trim()}</div>
                 </div>
             </div>
-            <div class="area-ttd-kepsek" style="position: absolute; bottom: 14px; right: 6px; text-align: center; font-size: 4.8pt; width: 28mm; line-height: 1.1; z-index: 10; color: #000000;">
-                <div style="font-weight: 500; margin-top: 1px; color: #000000;">Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                <div style="margin-top: 1px; font-weight: 600; color: #000000;">Kepala Sekolah,</div>
-                <div class="wrapper-ttd" style="height: 8mm; position: relative; display: flex; align-items: center; justify-content: center; margin: 1px 0;">
-                    ${ capStempelBase64 ? `<img src="${capStempelBase64}" class="img-cap" style="max-height: 19mm; position: absolute; left: -3px; top: 50%; transform: translateY(-50%); opacity: 0.9; mix-blend-mode: multiply; z-index: 11;">` : '' }
-                    ${ ttdKepsekBase64 ? `<img src="${ttdKepsekBase64}" class="img-ttd" style="max-height: 18.5mm; position: absolute; top: 50%; transform: translateY(-50%); z-index: 12; mix-blend-mode: multiply;">` : '' }
-                </div>
-                <div style="font-weight: 800; font-size: 5.6pt; color: #000000; text-decoration: underline; line-height: 1; position: relative; z-index: 13; margin-top: 1px;">${namaKepsek}</div>
-                <div style="font-size: 4.8pt; font-weight: 600; color: #334155; line-height: 1; margin-top: 1px; position: relative; z-index: 13;">NIP. ${nipKepsek.replace('NIP.', '').trim()}</div>
+            <div style="position: absolute; left: 0; right: 0; bottom: 0px; z-index: 30; background: #1e3a8a; height: 3.8mm; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 4.4pt; font-weight: 700; color: white; letter-spacing: 0.4px; white-space: nowrap; text-transform: uppercase;">SMK NEGERI 1 MEPANGA • MUDA • BISA • LUAR BIASA</span>
             </div>
         </div>
-        <div style="position: absolute; left: 0; right: 0; bottom: 0px; z-index: 30; background: #1e3a8a; height: 3.8mm; display: flex; align-items: center; justify-content: center;">
-            <span style="font-size: 4.4pt; font-weight: 700; color: white; letter-spacing: 0.4px; white-space: nowrap; text-transform: uppercase;">SMK NEGERI 1 MEPANGA • MUDA • BISA • LUAR BIASA</span>
-        </div>
-    </div>
 
-    <!-- KARTU BAGIAN BELAKANG -->
-    <div class="kartu-id" style="position: relative; overflow: hidden; width: 87.60mm; height: 55.98mm; background: #fff; box-sizing: border-box;">
-        <div class="bg-belakang" style="height: 100%; display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; position: relative;">
-            <div class="bg-circle1"></div><div class="bg-circle2"></div><div class="bg-strip1"></div><div class="bg-strip2"></div>
-            <img src="${logoSekolahBase64}" class="watermark-logo" style="opacity: .05; width: 34mm; height: 34mm; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -45%); z-index: 1; pointer-events: none; object-fit: contain;">
-            <div class="header-tatatertib" style="position: relative; z-index: 10; margin-top: 4px;">TATA TERTIB PEMEGANG KARTU PELAJAR</div>
-            <div class="isi-tatatertib" style="position: relative; z-index: 10; padding: 2px 10px; font-size: 5.2pt; line-height: 1.25;">
-                <ol style="margin: 0; padding-left: 10px;">
-                    <li>Kartu Pelajar merupakan identitas resmi peserta didik SMK Negeri 1 Mepanga.</li>
-                    <li>Kartu wajib dibawa setiap hari selama kegiatan pembelajaran berlangsung.</li>
-                    <li>Kartu ini tidak boleh dipindahtangankan kepada orang lain.</li>
-                    <li>Kehilangan kartu wajib segera dilaporkan kepada Wali Kelas/Kesiswaan.</li>
-                    <li>Kartu yang rusak atau hilang dapat diganti sesuai ketentuan sekolah.</li>
-                    <li>QR Code pada kartu digunakan sebagai identitas digital siswa dan tidak boleh dirusak.</li>
-                    <li>Penyalahgunaan kartu pelajar akan dikenakan sanksi sesuai tata tertib sekolah.</li>
-                </ol>
-            </div>
-            <div style="position: relative; z-index: 10; margin: 0 10px; padding: 4px; border-radius: 6px; background: rgba(255,255,255,.08); font-size: 4.8pt; line-height: 1.3; text-align: center; color: white;">
-                <b>SMK NEGERI 1 MEPANGA</b><br>Jl. Nusantara No.116 Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong, Sulawesi Tengah
-            </div>
-            <div style="position: relative; z-index: 10; display: flex; justify-content: center; margin-top: -1px; margin-bottom: 2px;">
-                <div style="background: white; padding: 3px; border-radius: 4px; line-height: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(siswa.nisn || siswa.nis || siswa.id)}" style="width: 12mm; height: 12mm; object-fit: contain;">
+        <!-- KARTU BAGIAN BELAKANG -->
+        <div class="kartu-id" style="position: relative; overflow: hidden; width: 87.60mm; height: 55.98mm; background: #fff; box-sizing: border-box;">
+            <div class="bg-belakang" style="height: 100%; display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; position: relative;">
+                <div class="bg-circle1"></div><div class="bg-circle2"></div><div class="bg-strip1"></div><div class="bg-strip2"></div>
+                <img src="${logoSekolahBase64}" class="watermark-logo" style="opacity: .05; width: 34mm; height: 34mm; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -45%); z-index: 1; pointer-events: none; object-fit: contain;">
+                <div class="header-tatatertib" style="position: relative; z-index: 10; margin-top: 4px;">TATA TERTIB PEMEGANG KARTU PELAJAR</div>
+                <div class="isi-tatatertib" style="position: relative; z-index: 10; padding: 2px 10px; font-size: 5.2pt; line-height: 1.25;">
+                    <ol style="margin: 0; padding-left: 10px;">
+                        <li>Kartu Pelajar merupakan identitas resmi peserta didik SMK Negeri 1 Mepanga.</li>
+                        <li>Kartu wajib dibawa setiap hari selama kegiatan pembelajaran berlangsung.</li>
+                        <li>Kartu ini tidak boleh dipindahtangankan kepada orang lain.</li>
+                        <li>Kehilangan kartu wajib segera dilaporkan kepada Wali Kelas/Kesiswaan.</li>
+                        <li>Kartu yang rusak atau hilang dapat diganti sesuai ketentuan sekolah.</li>
+                        <li>QR Code pada kartu digunakan sebagai identitas digital siswa dan tidak boleh dirusak.</li>
+                        <li>Penyalahgunaan kartu pelajar akan dikenakan sanksi sesuai tata tertib sekolah.</li>
+                    </ol>
+                </div>
+                <div style="position: relative; z-index: 10; margin: 0 10px; padding: 4px; border-radius: 6px; background: rgba(255,255,255,.08); font-size: 4.8pt; line-height: 1.3; text-align: center; color: white;">
+                    <b>SMK NEGERI 1 MEPANGA</b><br>Jl. Nusantara No.116 Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong, Sulawesi Tengah
+                </div>
+                <div style="position: relative; z-index: 10; display: flex; justify-content: center; margin-top: -1px; margin-bottom: 2px;">
+                    <div style="background: white; padding: 3px; border-radius: 4px; line-height: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(siswa.nisn || siswa.nis || siswa.id)}" style="width: 12mm; height: 12mm; object-fit: contain;">
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-  </div>
-    `);
-  });
+      </div>
+        `);
+    });
+
+    win.document.write(`</div>`);
+  }
 
   win.document.write(`
     </div>
