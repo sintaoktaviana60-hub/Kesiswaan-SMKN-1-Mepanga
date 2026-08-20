@@ -1018,6 +1018,7 @@ function buildSidebar() {
       // ==========================================
       { type: 'heading', label: 'AKADEMIK & PRESENSI' },
       { id: 'statistik-kehadiran', icon: 'bar-chart-3', label: 'Statistik Kesiswaan' },
+      { id: 'kehadiran', icon: 'check-circle', label: 'Kehadiran' },      
       { id: 'rekap-ketidakhadiran', icon: 'calendar-x', label: 'Rekap Ketidakhadiran' },
       { id: 'bimbingan-kesiswaan', icon: 'shield-alert', label: 'Bimbingan Kesiswaan' }, 
 
@@ -6177,29 +6178,67 @@ document.addEventListener('click', function(e) {
   }
 });
 
-    // ===== SEKRETARIS - KEHADIRAN (VERSI PERBAIKAN TOTAL & AUTO-SINKRONISASI POIN) =====
+// ===== HELPER: MENDAPATKAN KELAS AKTIF SESUAI ROLE =====
+function getSelectedKelasKehadiran() {
+  if (currentUser && currentUser.role === 'admin') {
+    const elKelas = document.getElementById('khKelasSelect');
+    if (elKelas) return elKelas.value;
+    const daftarKelas = [...new Set((DB.siswa || []).map(s => s.kelas))].sort();
+    return daftarKelas[0] || '';
+  }
+  return currentUser ? currentUser.kelas : '';
+}
+
+// ===== SEKRETARIS & ADMIN - KEHADIRAN =====
 function renderKehadiran() {
   const mc = document.getElementById('mainContent');
   if (!mc) return;
 
   if (window.dashboardInterval) clearInterval(window.dashboardInterval);
 
-  const myKelas = currentUser.kelas;
-  const tglHariIni = new Date().toISOString().split('T')[0];
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  const daftarKelas = [...new Set((DB.siswa || []).map(s => s.kelas))].sort();
+  
+  let myKelas = getSelectedKelasKehadiran();
+  if (isAdmin && !myKelas && daftarKelas.length > 0) {
+    myKelas = daftarKelas[0];
+  }
+
+  const tglHariIni = document.getElementById('khTanggal')?.value || new Date().toISOString().split('T')[0];
   const siswaKelas = (DB.siswa || []).filter(s => s.kelas === myKelas);
+
+  // Komponen Pilihan Kelas (Dropdown untuk Admin, Input Readonly untuk Sekretaris)
+  const kelasInputHTML = isAdmin ? `
+    <div>
+      <label class="block text-sm font-medium mb-1" for="khKelasSelect">Pilih Kelas</label>
+      <select id="khKelasSelect" onchange="renderKehadiran()" class="px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm font-semibold">
+        ${daftarKelas.map(k => `<option value="${k}" ${k === myKelas ? 'selected' : ''}>Kelas ${k}</option>`).join('')}
+      </select>
+    </div>
+  ` : `
+    <div>
+      <label class="block text-sm font-medium mb-1">Kelas Anda</label>
+      <input readonly value="${myKelas}" class="px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 dark:border-gray-600 text-sm w-full font-semibold">
+    </div>
+  `;
+
+  // Tombol Khusus Admin: Set Semua Hadir
+  const btnSetSemuaHadir = isAdmin ? `
+    <button onclick="setSemuaHadir()" type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 font-bold transition shadow-sm h-[38px]">
+      ⚡ Set Semua Hadir
+    </button>
+  ` : '';
 
   mc.innerHTML = `
     <div class="fade-in space-y-4">
       <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-        <div class="flex flex-wrap items-center gap-4 mb-4">
+        <div class="flex flex-wrap items-end gap-4 mb-4">
           <div>
             <label class="block text-sm font-medium mb-1" for="khTanggal">Tanggal Absensi</label>
-            <input id="khTanggal" type="date" value="${tglHariIni}" onchange="muatUlangStatusAbsenSekre()" class="px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm">
+            <input id="khTanggal" type="date" value="${tglHariIni}" onchange="renderKehadiran()" class="px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm">
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">Kelas Anda</label>
-            <input readonly value="${myKelas}" class="px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 dark:border-gray-600 text-sm w-full">
-          </div>
+          ${kelasInputHTML}
+          ${btnSetSemuaHadir}
         </div>
 
         <div class="overflow-x-auto">
@@ -6212,27 +6251,41 @@ function renderKehadiran() {
               </tr>
             </thead>
             <tbody>
-              ${siswaKelas.map((s, i) => `
-                <tr class="border-t dark:border-gray-700/50 hover:bg-gray-50/30">
-                  <td class="py-3 px-4 font-mono text-gray-400">${i + 1}</td>
-                  <td class="py-3 px-4 font-semibold text-gray-800 dark:text-gray-200">${s.nama}</td>
-                  <td class="py-3 px-4">
-                    <select id="kh-${s.id}" class="px-3 py-1.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm focus:ring-2 focus:ring-primary-500 font-medium">
-                      <option value="-">— Belum Diabsen —</option>
-                      <option value="hadir" class="text-emerald-600 font-bold">🟢 Hadir</option>
-                      <option value="sakit" class="text-blue-600 font-bold">🤒 Sakit</option>
-                      <option value="izin" class="text-amber-600 font-bold">📩 Izin</option>
-                      <option value="alpa" class="text-red-600 font-bold">❌ Alpa</option>
-                    </select>
-                  </td>
-                </tr>
-              `).join('')}
+              ${siswaKelas.length === 0 ? `
+                <tr><td colspan="3" class="text-center py-4 text-gray-400">Tidak ada data siswa untuk kelas ini.</td></tr>
+              ` : siswaKelas.map((s, i) => {
+                // Mencari status absensi siswa langsung dari memori DB saat render HTML
+                const dataAbsen = (DB.kehadiran || []).find(k => 
+                  String(k.siswaId).trim() === String(s.id).trim() && 
+                  String(k.tanggal) === String(tglHariIni)
+                );
+                const st = dataAbsen ? String(dataAbsen.status).toLowerCase() : '-';
+
+                return `
+                  <tr class="border-t dark:border-gray-700/50 hover:bg-gray-50/30">
+                    <td class="py-3 px-4 font-mono text-gray-400">${i + 1}</td>
+                    <td class="py-3 px-4 font-semibold text-gray-800 dark:text-gray-200">${s.nama}</td>
+                    <td class="py-3 px-4">
+                      <select id="kh-${s.id}" class="px-3 py-1.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm focus:ring-2 focus:ring-primary-500 font-medium">
+                        <option value="-" ${st === '-' ? 'selected' : ''}>— Belum Diabsen —</option>
+                        <option value="hadir" class="text-emerald-600 font-bold" ${st === 'hadir' ? 'selected' : ''}>🟢 Hadir</option>
+                        <option value="sakit" class="text-blue-600 font-bold" ${st === 'sakit' ? 'selected' : ''}>🤒 Sakit</option>
+                        <option value="izin" class="text-amber-600 font-bold" ${st === 'izin' ? 'selected' : ''}>📩 Izin</option>
+                        <option value="alpa" class="text-red-600 font-bold" ${st === 'alpa' ? 'selected' : ''}>❌ Alpa</option>
+                      </select>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
         </div>
-        <button onclick="simpanKehadiran()" class="mt-5 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 font-bold transition shadow-sm">
-          💾 Simpan Kehadiran
-        </button>
+
+        <div class="mt-5">
+          <button onclick="simpanKehadiran()" class="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 font-bold transition shadow-sm">
+            💾 Simpan Kehadiran
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -6244,36 +6297,43 @@ function muatUlangStatusAbsenSekre() {
   const tglInput = document.getElementById('khTanggal');
   if (!tglInput) return;
   const tanggalSelected = tglInput.value;
-  const myKelas = currentUser.kelas;
+  const myKelas = getSelectedKelasKehadiran();
   const siswaKelas = (DB.siswa || []).filter(s => s.kelas === myKelas);
 
   siswaKelas.forEach(s => {
     const elDropdown = document.getElementById(`kh-${s.id}`);
     if (elDropdown) {
-      // Cari data absensi siswa ini pada tanggal terpilih
       const dataAbsen = (DB.kehadiran || []).find(k => 
-        String(k.siswaId) === String(s.id) && k.tanggal === tanggalSelected
+        String(k.siswaId).trim() === String(s.id).trim() && 
+        String(k.tanggal) === String(tanggalSelected)
       );
-      
-      // Jika ada data di DB, pilih nilainya (hadir/sakit/izin/alpa), jika tidak ada set ke "-"
       elDropdown.value = dataAbsen ? dataAbsen.status : "-";
     }
   });
 }
 
+// Fungsi Bantuan Admin: Mengubah semua status di layar menjadi "Hadir"
+function setSemuaHadir() {
+  const myKelas = getSelectedKelasKehadiran();
+  const siswaKelas = (DB.siswa || []).filter(s => s.kelas === myKelas);
 
+  siswaKelas.forEach(s => {
+    const elDropdown = document.getElementById(`kh-${s.id}`);
+    if (elDropdown) {
+      elDropdown.value = "hadir";
+    }
+  });
+}
+
+// ===== INTEGRASI FIREBASE =====
 function loadKehadiranFromFirebase() {
-  // Mengarah ke path yang benar di kesiswaan_cloud
   firebase.database().ref("kesiswaan_cloud/kehadiran").on("value", (snapshot) => {
     const data = snapshot.val();
 
     if (data) {
-      // 🔥 PERBAIKAN KRUSIAL: Cek apakah data dari Firebase berupa Array atau Objek
       if (Array.isArray(data)) {
-        // Jika sudah berbentuk Array murni, langsung gunakan (buang element null jika ada)
         DB.kehadiran = data.filter(item => item !== null);
       } else {
-        // Jika berbentuk Objek, konversi menggunakan Object.values
         DB.kehadiran = Object.values(data);
       }
     } else {
@@ -6282,12 +6342,10 @@ function loadKehadiranFromFirebase() {
 
     console.log("Kehadiran berhasil dimuat dari Firebase:", DB.kehadiran);
 
-    // 🔥 Langsung panggil sinkronisasi dropdown halaman sekretaris
     if (typeof muatUlangStatusAbsenSekre === "function") {
       muatUlangStatusAbsenSekre();
     }
 
-    // Perbarui halaman dashboard jika sedang dibuka
     if (typeof hitungUlangPoinDashboard === "function") {
       hitungUlangPoinDashboard();
     }
@@ -6303,7 +6361,6 @@ function loadKehadiranFromFirebase() {
 }
 
 function loadPenebusanPoinFromFirebase() {
-  // 🔥 PERBAIKAN PATH: Diubah dari "penebusan_poin" menjadi "kesiswaan_cloud/penebusan_poin"
   firebase.database().ref("kesiswaan_cloud/penebusan_poin").on("value", (snapshot) => {
     const data = snapshot.val();
 
@@ -6315,19 +6372,17 @@ function loadPenebusanPoinFromFirebase() {
 
     console.log("Data Penebusan Khusus berhasil dimuat dari Firebase:", DB.penebusan_poin);
 
-    // Setiap kali data penebusan berubah, jalankan hitung ulang
     if (typeof hitungUlangPoinDashboard === "function") {
       hitungUlangPoinDashboard();
     }
 
-    // Refresh tampilan halaman yang sedang aktif agar poin langsung terupdate di layar
     if (typeof currentPage !== 'undefined' && typeof renderPage === "function") {
       renderPage(currentPage);
     }
   });
 }
 
-// Variable penanda agar tidak terjadi double-save atau loop
+// ===== PROSES SIMPAN KEHADIRAN =====
 let isSavingKehadiran = false;
 
 function simpanKehadiran() {
@@ -6340,7 +6395,14 @@ function simpanKehadiran() {
     return;
   }
 
-  const myKelas = (currentUser && currentUser.kelas) ? currentUser.kelas : '';
+  // 🔥 PERBAIKAN KRUSIAL: Menggunakan helper agar Admin mengambil kelas dari dropdown, bukan currentUser.kelas
+  const myKelas = getSelectedKelasKehadiran();
+
+  if (!myKelas) {
+    if (typeof showToast === 'function') showToast('Pilih kelas terlebih dahulu!', 'danger');
+    return;
+  }
+
   const siswaKelas = (DB && DB.siswa) ? DB.siswa.filter(s => s.kelas === myKelas) : [];
 
   if (!Array.isArray(DB.hariAktif)) DB.hariAktif = [];
@@ -6381,48 +6443,14 @@ function simpanKehadiranDanSync() {
   if (isSavingKehadiran) return;
   isSavingKehadiran = true;
 
-  // 1. Hitung poin di memori lokal secara instan
-  if (Array.isArray(DB.siswa)) {
-    DB.siswa.forEach(siswa => {
-      let totalPoinAbsen = 0;
-      const logAbsen = (DB.kehadiran || []).filter(k => String(k.siswaId) === String(siswa.id));
-
-      logAbsen.forEach(log => {
-        const st = String(log.status).toLowerCase();
-        if (st === 'alpa' || st === 'a') totalPoinAbsen += 3;
-        else if (st === 'izin' || st === 'i') totalPoinAbsen += 1;
-        else if (st === 'sakit' || st === 's') totalPoinAbsen += 0.5;
-      });
-
-      siswa.poinAbsen = totalPoinAbsen;
-
-      let totalPoinTataTertib = 0;
-      if (DB.pelanggaran) {
-        const pelanggaranSiswa = DB.pelanggaran.filter(p =>
-          String(p.siswaId) === String(siswa.id) ||
-          (p.namaSiswa || "").trim().toLowerCase() === siswa.nama.trim().toLowerCase()
-        );
-
-        pelanggaranSiswa.forEach(p => {
-          const tt = (DB.tatatertib || []).find(x => x.id == p.jenisId || x.kode == p.jenisId);
-          totalPoinTataTertib += tt ? parseInt(tt.poin) : (parseInt(p.poin) || 0);
-        });
-      }
-
-      siswa.poinPelanggaranDasar = totalPoinTataTertib;
-      const pengurangPenebusan = parseInt(siswa.poinPenebusan) || 0;
-      siswa.poin = Math.max(0, (totalPoinAbsen + totalPoinTataTertib) - pengurangPenebusan);
-    });
-  }
-
-  // UBAH TAMPILAN TOMBOL MENJADI LOADING
+  // Ubah tampilan tombol menjadi loading
   const btnSimpan = document.querySelector("button[onclick='simpanKehadiran()']");
   if (btnSimpan) {
     btnSimpan.disabled = true;
     btnSimpan.innerHTML = '⏳ Menyimpan...';
   }
 
-  // 2. Simpan LANGSUNG ke Node spesifik Firebase (Sangat Ringan & Cepat)
+  // Simpan LANGSUNG ke Firebase Cloud
   const updates = {};
   updates["kesiswaan_cloud/kehadiran"] = DB.kehadiran || [];
   updates["kesiswaan_cloud/hariAktif"] = DB.hariAktif || [];
@@ -6436,7 +6464,7 @@ function simpanKehadiranDanSync() {
       }
 
       if (typeof showToast === "function") {
-        showToast('Kehadiran berhasil disimpan!', 'success');
+        showToast('Kehadiran berhasil disimpan ke Cloud!', 'success');
       }
     })
     .catch(err => {
