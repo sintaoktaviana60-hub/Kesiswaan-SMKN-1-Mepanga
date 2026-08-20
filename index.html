@@ -552,53 +552,74 @@ function hitungUlangSemuaPoin() {
 
 
 // =========================================================================
-// FUNGSI SINKRONISASI UPDATE DATA KE CLOUD ONLINE (VERSI SEHAT ANTI-ERROR)
-// =========================================================================
-// =========================================================================
-// FUNGSI SINKRONISASI UPDATE DATA KE CLOUD ONLINE (VERSI SEHAT ANTI-ERROR & AUTO-PURGE CACHE)
+// FUNGSI SINKRONISASI UPDATE DATA KE CLOUD ONLINE (VERSI ANTI-QUOTA EXCEEDED)
 // =========================================================================
 async function simpanDataKeStorage(node) {
-  let targetDb = null;
+  try {
+    // 1. SIMPAN KE LOCALSTORAGE (DENGAN SAFEGUARD QUOTA)
+    if (typeof DB !== 'undefined' && DB[node] !== undefined) {
+      try {
+        localStorage.setItem(node, JSON.stringify(DB[node]));
+      } catch (quotaError) {
+        // Mencegah crash jika LocalStorage penuh
+        console.warn(`[Storage Warning] LocalStorage penuh saat simpan [${node}]. Mengandalkan simpan Cloud/Firebase.`);
+      }
+    }
 
-  if (typeof database !== 'undefined') {
-    targetDb = database;
-  } else if (window.firebase && window.firebase.apps && window.firebase.apps.length > 0) {
-    targetDb = window.firebase.apps[0].database();
+    // Map ketersediaan data node
+    const dataNode = {
+      users: DB.users,
+      siswa: DB.siswa,
+      kelas: DB.kelas,
+      tatatertib: DB.tatatertib,
+      pelanggaran: DB.pelanggaran,
+      kehadiran: DB.kehadiran,
+      hariAktif: DB.hariAktif,
+      kreditPoin: DB.kreditPoin,
+      kreditPoinMaster: DB.kreditPoinMaster,
+      riwayatTindakan: DB.riwayatTindakan,
+      penebusan_poin: DB.penebusan_poin || [],
+      bimbingan: DB.bimbingan,
+      kelengkapanData: DB.kelengkapanData,
+      auditLog: DB.auditLog,
+      identitas: DB.identitas,
+      libur: DB.libur,
+      jadwalKesiswaan: DB.jadwalKesiswaan,
+      catatanKesiswaan: DB.catatanKesiswaan
+    };
+
+    // 2. OPSI FIREBASE DIRECT (REALTIME DATABASE SDK)
+    let targetDb = null;
+    if (typeof database !== 'undefined') {
+      targetDb = database;
+    } else if (window.firebase && window.firebase.apps && window.firebase.apps.length > 0) {
+      targetDb = window.firebase.apps[0].database();
+    }
+
+    if (targetDb && (node in dataNode)) {
+      await targetDb.ref("kesiswaan_cloud/" + node).set(dataNode[node]);
+      console.log(`[Firebase Realtime] Node ${node} berhasil disimpan ke Cloud.`);
+      return true;
+    }
+
+    // 3. OPSI FIREBASE SERVICE WRAPPER (JIKA PAKAI FIREBASESERVICE)
+    if (typeof FirebaseService !== 'undefined') {
+      if (node === 'jadwalKesiswaan' && typeof FirebaseService.simpanJadwalKesiswaan === 'function') {
+        await FirebaseService.simpanJadwalKesiswaan();
+      } else if (node === 'catatanKesiswaan' && typeof FirebaseService.simpanCatatanKesiswaan === 'function') {
+        await FirebaseService.simpanCatatanKesiswaan();
+      } else if (typeof FirebaseService.saveNode === 'function') {
+        await FirebaseService.saveNode(node, DB[node]);
+      }
+      return true;
+    }
+
+    return true;
+
+  } catch (error) {
+    console.warn(`Peringatan simpan online ke Firebase gagal untuk [${node}]:`, error);
+    return true; 
   }
-
-  if (!targetDb) {
-    console.error("Firebase tidak ditemukan.");
-    return false;
-  }
-
-  const dataNode = {
-    users: DB.users,
-    siswa: DB.siswa,
-    kelas: DB.kelas,
-    tatatertib: DB.tatatertib,
-    pelanggaran: DB.pelanggaran,
-    kehadiran: DB.kehadiran,
-    hariAktif: DB.hariAktif,
-    kreditPoin: DB.kreditPoin,
-    kreditPoinMaster: DB.kreditPoinMaster,
-    riwayatTindakan: DB.riwayatTindakan,
-    penebusan_poin: DB.penebusan_poin || [], // 🟢 Tambahkan ini
-    bimbingan: DB.bimbingan,
-    kelengkapanData: DB.kelengkapanData,
-    auditLog: DB.auditLog,
-    identitas: DB.identitas,
-    libur: DB.libur,
-    jadwalKesiswaan: DB.jadwalKesiswaan,
-    catatanKesiswaan: DB.catatanKesiswaan
-  };
-
-  if (!(node in dataNode)) {
-    console.error("Node tidak dikenal :", node);
-    return false;
-  }
-
-  await targetDb.ref("kesiswaan_cloud/" + node).set(dataNode[node]);
-  return true;
 }
 
 // ==========================================
@@ -2380,41 +2401,105 @@ daftarSiswa.forEach(s => {
       jendelaCetak.document.close();
     }
     
+// Variable state lokal untuk menyimpan pilihan filter & sort
+let filterKelasRekap = 'ALL';
+let sortPoinRekap = 'ASC'; // 'ASC' = Terendah -> Tertinggi, 'DESC' = Tertinggi -> Terendah
+
 function renderRekapKreditPoin() {
   const mc = document.getElementById('mainContent');
+  if (!mc) return;
 
+  // 1. Ambil daftar semua kelas unik dari DB.kelas atau DB.siswa
+  const daftarKelas = Array.from(new Set([
+    ...(DB.kelas || []).map(k => typeof k === 'object' ? k.nama || k.name : k),
+    ...(DB.siswa || []).map(s => s.kelas)
+  ])).filter(Boolean).sort();
+
+// 2. Olah & kalkulasi data semua siswa (Sinkron dengan Bimbingan Kesiswaan)
   let data = (DB.siswa || []).map(siswa => {
-    // Sinkronisasi engine perhitungan poin utama
-    const hasil = typeof hitungPoinSiswa === 'function' ? hitungPoinSiswa(siswa.id) : { totalKredit: 0, totalPelanggaran: 0, sisaPoin: 100 };
-    
+    // A. Kredit Poin Prestasi
     const kredit = (DB.kreditPoin || []).filter(k => String(k.siswaId) === String(siswa.id));
-    const totalKredit = hasil.totalKredit || kredit.reduce((a, b) => a + (b.poin || 0), 0);
+    const totalKredit = kredit.reduce((a, b) => a + (parseInt(b.poin) || 0), 0);
     
-    const totalPelanggaran = hasil.totalPelanggaran || (DB.pelanggaran || [])
-      .filter(p => String(p.siswaId) === String(siswa.id))
-      .reduce((a, b) => a + (parseInt(b.poin) || 0), 0);
+    // B. Total Poin Pelanggaran Tata Tertib
+    let poinPelanggaranTT = 0;
+    if (DB.pelanggaran) {
+      DB.pelanggaran.forEach(p => {
+        if (String(p.siswaId || p.idSiswa) === String(siswa.id)) {
+          const tt = DB.tatatertib && DB.tatatertib.length > 0 ? DB.tatatertib.find(x => x.id == p.jenisId || x.kode == p.jenisId) : null;
+          poinPelanggaranTT += tt ? (parseInt(tt.poin) || 0) : (parseInt(p.poin) || 0);
+        }
+      });
+    }
 
-    const totalAbsen = (DB.kehadiran || []).filter(k => 
-      String(k.siswaId) === String(siswa.id) && 
-      ['ALPA', 'ALFA', 'A'].includes(String(k.status || '').toUpperCase())
-    ).length;
+    // C. Total Poin Ketidakhadiran (Absensi: Alpa x 3, Izin x 1, Sakit x 0.5)
+    let totalPoinAbsen = 0;
+    let totalHariAlpa = 0;
+    if (DB.kehadiran) {
+      const logSiswa = DB.kehadiran.filter(k => 
+        String(k.siswaId || k.idSiswa || '') === String(siswa.id) ||
+        (siswa.nisn && String(k.nisn || '') === String(siswa.nisn))
+      );
+      
+      let alpa = 0, izin = 0, sakit = 0;
+      logSiswa.forEach(k => {
+        const st = String(k.status || "").toUpperCase().trim();
+        if (st === 'A' || st === 'ALFA' || st === 'ALPA') alpa++;
+        else if (st === 'I' || st === 'IZIN') izin++;
+        else if (st === 'S' || st === 'SAKIT') sakit++;
+      });
+      
+      totalHariAlpa = alpa;
+      totalPoinAbsen = (alpa * 3) + (izin * 1) + (sakit * 0.5);
+    }
 
-    const totalAkhir = hasil.sisaPoin !== undefined ? hasil.sisaPoin : (totalKredit - totalPelanggaran);
+    // D. Total Remisi / Penebusan Poin
+    const sourcePenebusan = DB.penebusanPoin || DB.penebusan_poin || [];
+    const listPenebusan = Array.isArray(sourcePenebusan) 
+      ? sourcePenebusan 
+      : Object.keys(sourcePenebusan).map(k => ({ idPenebusan: k, ...sourcePenebusan[k] }));
+
+    let totalPenebusan = 0;
+    listPenebusan.forEach(p => {
+      if (String(p.siswaId || p.idSiswa) === String(siswa.id)) {
+        totalPenebusan += (Number(p.poinPemulihan || p.poin) || 0);
+      }
+    });
+
+    // E. Total Poin Pelanggaran Bersih
+    let totalKotorPelanggaran = poinPelanggaranTT + totalPoinAbsen;
+    let totalPelanggaran = totalKotorPelanggaran - totalPenebusan;
+    if (totalPelanggaran < 0) totalPelanggaran = 0;
+
+    // F. Total Skor Akhir (Murni: Kredit - Pelanggaran Bersih)
+    const totalAkhir = totalKredit - totalPelanggaran;
 
     return {
       ...siswa,
       totalKredit,
       totalPelanggaran,
-      totalAbsen,
+      totalAbsen: totalHariAlpa,
       totalAkhir
     };
   });
 
-  // Urutkan dari sisa poin terkecil (siswa paling butuh perhatian berada di atas)
-  data.sort((a, b) => a.totalAkhir - b.totalAkhir);
+  // 3. Terapkan Filter Kelas
+  if (filterKelasRekap !== 'ALL') {
+    data = data.filter(s => String(s.kelas).trim() === String(filterKelasRekap).trim());
+  }
+
+  // 4. Terapkan Sorting Sisa Poin
+  data.sort((a, b) => {
+    if (sortPoinRekap === 'ASC') {
+      return a.totalAkhir - b.totalAkhir; // Sisa Poin Terendah -> Tertinggi
+    } else {
+      return b.totalAkhir - a.totalAkhir; // Sisa Poin Tertinggi -> Terendah
+    }
+  });
 
   mc.innerHTML = `
   <div class="fade-in space-y-6">
+    <!-- Header Banner -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-slate-800 to-indigo-900 p-6 rounded-3xl text-white shadow-lg">
       <div>
         <h3 class="text-xl font-bold tracking-tight">Rekapitulasi Kredit & Skor Poin</h3>
@@ -2426,6 +2511,36 @@ function renderRekapKreditPoin() {
       </div>
     </div>
 
+    <!-- Filter & Sorting Controls -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <!-- Filter Kelas -->
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <label class="text-xs font-semibold text-slate-500 dark:text-gray-400 whitespace-nowrap">Filter Kelas:</label>
+          <select id="selectFilterKelas" onchange="ubahFilterKelasRekap(this.value)" class="w-full sm:w-auto px-3 py-2 bg-slate-50 dark:bg-gray-700 text-slate-700 dark:text-gray-200 border border-slate-200 dark:border-gray-600 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="ALL" ${filterKelasRekap === 'ALL' ? 'selected' : ''}>Semua Kelas</option>
+            ${daftarKelas.map(k => `<option value="${k}" ${filterKelasRekap === k ? 'selected' : ''}>${k}</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- Sort Sisa Poin -->
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <label class="text-xs font-semibold text-slate-500 dark:text-gray-400 whitespace-nowrap">Urutkan Poin:</label>
+          <select id="selectSortPoin" onchange="ubahSortPoinRekap(this.value)" class="w-full sm:w-auto px-3 py-2 bg-slate-50 dark:bg-gray-700 text-slate-700 dark:text-gray-200 border border-slate-200 dark:border-gray-600 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="ASC" ${sortPoinRekap === 'ASC' ? 'selected' : ''}>Terendah ➔ Tertinggi (Perlu Perhatian)</option>
+            <option value="DESC" ${sortPoinRekap === 'DESC' ? 'selected' : ''}>Tertinggi ➔ Terendah (Prestasi Terbaik)</option>
+          </select>
+        </div>
+      </div>
+
+      ${filterKelasRekap !== 'ALL' || sortPoinRekap !== 'ASC' ? `
+        <button onclick="resetFilterRekap()" class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+          Reset Filter
+        </button>
+      ` : ''}
+    </div>
+
+    <!-- Tabel Data Rekap -->
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
@@ -2443,7 +2558,13 @@ function renderRekapKreditPoin() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
-            ${data.map((s, index) => {
+            ${data.length === 0 ? `
+              <tr>
+                <td colspan="9" class="p-8 text-center text-slate-400 dark:text-gray-500 text-sm">
+                  Tidak ada data siswa yang ditemukan untuk filter ini.
+                </td>
+              </tr>
+            ` : data.map((s, index) => {
               let skorColorClass = "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400";
               let rankBadgeClass = "bg-slate-100 text-slate-700 dark:bg-gray-700 dark:text-gray-300";
 
@@ -2453,9 +2574,9 @@ function renderRekapKreditPoin() {
                 skorColorClass = "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-bold";
               }
 
-              if (index === 0 && s.totalAkhir < 100) rankBadgeClass = "bg-red-600 text-white shadow-sm shadow-red-200";
-              else if (index === 1 && s.totalAkhir < 100) rankBadgeClass = "bg-orange-500 text-white";
-              else if (index === 2 && s.totalAkhir < 100) rankBadgeClass = "bg-amber-500 text-white";
+              if (index === 0 && s.totalAkhir < 100 && sortPoinRekap === 'ASC') rankBadgeClass = "bg-red-600 text-white shadow-sm shadow-red-200";
+              else if (index === 1 && s.totalAkhir < 100 && sortPoinRekap === 'ASC') rankBadgeClass = "bg-orange-500 text-white";
+              else if (index === 2 && s.totalAkhir < 100 && sortPoinRekap === 'ASC') rankBadgeClass = "bg-amber-500 text-white";
 
               return `
               <tr class="hover:bg-slate-50/80 dark:hover:bg-gray-700/40 transition-colors duration-150">
@@ -2500,18 +2621,46 @@ function renderRekapKreditPoin() {
   </div>`;
 }
 
+// =========================================================================
+// FUNGSI HANDLER UNTUK MERUBAH FILTER TERSEBUT
+// =========================================================================
+function ubahFilterKelasRekap(val) {
+  filterKelasRekap = val;
+  renderRekapKreditPoin();
+}
+
+function ubahSortPoinRekap(val) {
+  sortPoinRekap = val;
+  renderRekapKreditPoin();
+}
+
+function resetFilterRekap() {
+  filterKelasRekap = 'ALL';
+  sortPoinRekap = 'ASC';
+  renderRekapKreditPoin();
+}
+
 function previewKreditPoin(siswaId) {
-  // Fungsi ini dipertahankan agar tidak memicu error jika dipanggil dari elemen lain
   showModalPreviewKredit(siswaId);
 }
+
+
+// =========================================================================
+// FUNGSI UTAMA MODAL PREVIEW DENGAN FITUR RINCIAN & HAPUS DATA KREDIT/PELANGGARAN
+// =========================================================================
 
 function showModalPreviewKredit(siswaId) {
   const siswa = DB.siswa.find(s => String(s.id) === String(siswaId));
 
   if (!siswa) {
-    showToast('Data siswa tidak ditemukan', 'danger');
+    if (typeof showToast === 'function') showToast('Data siswa tidak ditemukan', 'danger');
+    else alert('Data siswa tidak ditemukan');
     return;
   }
+
+  // Hapus modal lama jika ada
+  const existingModal = document.getElementById('modalPreviewKredit');
+  if (existingModal) existingModal.remove();
 
   // 1. AMBIL DATA KREDIT (POSITIF) DAN PELANGGARAN (NEGATIF)
   const kredit = (DB.kreditPoin || []).filter(k => String(k.siswaId) === String(siswaId));
@@ -2519,11 +2668,11 @@ function showModalPreviewKredit(siswaId) {
   
   const hasil = typeof hitungPoinSiswa === 'function' ? hitungPoinSiswa(siswaId) : { totalKredit: 0, totalPelanggaran: 0, sisaPoin: 100 };
 
-  const totalKredit = hasil.totalKredit;
-  const totalPelanggaran = hasil.totalPelanggaran;
-  const sisaPoin = hasil.sisaPoin; // Kasus Said: 67
+  const totalKredit = hasil.totalKredit || kredit.reduce((a, b) => a + (parseInt(b.poin) || 0), 0);
+  const totalPelanggaran = hasil.totalPelanggaran || pelanggaran.reduce((a, b) => a + (parseInt(b.poin) || 0), 0);
+  const sisaPoin = hasil.sisaPoin !== undefined ? hasil.sisaPoin : (totalKredit - totalPelanggaran);
 
-  // 2. DATA KEHADIRAN & HARI AKTIF SINKRONISASI KESISWAAN
+  // 2. DATA KEHADIRAN & HARI AKTIF
   const logSiswa = (DB.kehadiran || []).filter(k => {
     const idDariAbsen = k.siswaId || k.id_siswa || k.siswa_id;
     return String(idDariAbsen) === String(siswaId);
@@ -2549,15 +2698,10 @@ function showModalPreviewKredit(siswaId) {
     persentaseKehadiran = "100.0";
   }
     
- // ====================================================
-  // 3. SINKRONISASI LOGIKA STATUS (Poin Awal 0, Pelanggaran = Minus)
-  // ====================================================
+  // 3. LOGIKA STATUS
   let statusText = 'SISWA DALAM KATEGORI AMAN';
   let statusColor = 'text-green-600 bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/50 dark:text-green-400';
 
-  // Asumsi variabel sisaPoin didapat dari: 0 - totalPoinPelanggaran (Contoh: -33)
-  // Nilai semakin kecil (semakin minus/negatif) berarti pelanggaran semakin berat.
-  
   if (sisaPoin <= -100) {
     statusText = '🚨 KRITIS (TERANCAM DO)';
     statusColor = 'text-red-700 bg-red-100 border-red-300 dark:bg-red-950/40 dark:border-red-900 dark:text-red-400';
@@ -2573,14 +2717,10 @@ function showModalPreviewKredit(siswaId) {
   } else if (sisaPoin <= -15) {
     statusText = 'BIMBINGAN WALI KELAS (TAHAP 1)';
     statusColor = 'text-yellow-600 bg-yellow-50 border-yellow-100 dark:bg-yellow-950/10 dark:border-yellow-900/30 dark:text-yellow-400';
-  } else {
-    // Menangani nilai dari -14, 0 (Netral), hingga nilai positif sebanyak-banyaknya (Siswa Berprestasi)
-    statusText = 'SISWA DALAM KATEGORI AMAN';
-    statusColor = 'text-green-600 bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/50 dark:text-green-400';
   }
 
-  // 4. GENERATE BARIS TABEL RIWAYAT PRESTASI (KREDIT +)
-  const riwayatKreditHtml = kredit.length === 0
+  // 4. GENERATE BARIS TABEL CETAK PRINT OUT
+  const riwayatKreditPrint = kredit.length === 0
     ? `<tr><td colspan="5" style="text-align:center; padding:12px; color:#94a3b8; font-style:italic;">Belum ada catatan riwayat penghargaan / poin positif.</td></tr>`
     : kredit.map((k, i) => `
       <tr style="border-b: 1px solid #e2e8f0; font-size:12px;">
@@ -2591,8 +2731,7 @@ function showModalPreviewKredit(siswaId) {
         <td style="padding:8px; text-align:right; font-weight:bold; color:#16a34a;">+${k.poin}</td>
       </tr>`).join('');
 
-  // 5. GENERATE BARIS TABEL RIWAYAT PELANGGARAN (PELANGGARAN -)
-  const riwayatPelanggaranHtml = pelanggaran.length === 0
+  const riwayatPelanggaranPrint = pelanggaran.length === 0
     ? `<tr><td colspan="5" style="text-align:center; padding:12px; color:#94a3b8; font-style:italic;">Bersih dari pelanggaran. Siswa berperilaku sangat baik.</td></tr>`
     : pelanggaran.map((p, i) => `
       <tr style="border-b: 1px solid #e2e8f0; font-size:12px;">
@@ -2603,7 +2742,7 @@ function showModalPreviewKredit(siswaId) {
         <td style="padding:8px; text-align:right; font-weight:bold; color:#dc2626;">-${p.poin}</td>
       </tr>`).join('');
 
-  // 6. STRUKTUR HTML PRINT OUT PREMIUM (TAB BARU)
+  // STRUKTUR HTML PRINT
   window.printTargetContent = `
     <html>
     <head>
@@ -2615,23 +2754,18 @@ function showModalPreviewKredit(siswaId) {
         .kop-lembaga { font-size: 14px; font-weight: bold; letter-spacing: 1px; margin: 0; }
         .kop-sekolah { font-size: 22px; font-weight: 900; color: #1e3a8a; margin: 2px 0; }
         .kop-alamat { font-size: 11px; color: #475569; font-style: italic; margin: 0; }
-        
         .doc-title { text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin: 15px 0 5px 0; }
         .doc-sub { text-align: center; font-size: 11px; color: #475569; margin: 0 0 25px 0; }
-        
         .meta-table { width: 100%; margin-bottom: 20px; font-size: 13px; }
         .meta-table td { padding: 4px 0; }
-        
         .grid-skor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
         .card-skor { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; text-align: center; }
         .card-title { font-size: 10px; text-transform: uppercase; font-weight: bold; color: #475569; }
         .card-val { font-size: 20px; font-weight: bold; margin-top: 4px; }
-        
         h4 { font-size: 13px; text-transform: uppercase; margin: 25px 0 8px 0; border-bottom: 1.5px solid #1e3a8a; padding-bottom: 4px; color: #1e3a8a; }
         table.data-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
         table.data-table th { background: #f1f5f9; padding: 8px; text-align: left; font-size: 11px; text-transform: uppercase; color: #334155; border: 1px solid #cbd5e1; }
         table.data-table td { border: 1px solid #e2e8f0; padding: 8px; }
-        
         .ttd-section { margin-top: 50px; display: flex; justify-content: space-between; font-size: 13px; page-break-inside: avoid; }
         .ttd-box { text-align: center; width: 220px; }
         .ttd-space { height: 75px; }
@@ -2641,14 +2775,12 @@ function showModalPreviewKredit(siswaId) {
       <div class="kop-surat">
         <div class="kop-text">
           <p class="kop-lembaga">PEMERINTAH PROVINSI SULAWESI TENGAH<br>DINAS PENDIDIKAN DAN KEBUDAYAAN</p>
-          <h2 class="kop-sekolah">SMK NEGERI 1 KAYU AGUNG</h2>
+          <h2 class="kop-sekolah">SMK NEGERI 1 MEPANGA</h2>
           <p class="kop-alamat">Jl. Nusantara No. 116, Desa Kayu Agung, Kec. Mepanga, Kabupaten Parigi Moutong, Kode Pos 94476</p>
         </div>
       </div>
-      
       <div class="doc-title">LEMBAR KENDALI LAPORAN KREDIT SKOR SISWA</div>
       <div class="doc-sub">Nomor Dokumen Internal: SKK/${new Date().getFullYear()}/${siswa.id.toString().substring(0,5)}</div>
-      
       <table class="meta-table">
         <tr>
           <td style="width: 18%;">Nama Lengkap</td><td style="width: 2%;">:</td><td style="font-weight: bold; font-size:14px; width: 35%;">${siswa.nama}</td>
@@ -2663,34 +2795,26 @@ function showModalPreviewKredit(siswaId) {
           <td>Status Sikap</td><td>:</td><td style="font-weight: bold; color: #1e3a8a;">${statusText}</td>
         </tr>
       </table>
-
       <div class="grid-skor">
         <div class="card-skor"><div class="card-title" style="color:#16a34a;">Total Kredit (+)</div><div class="card-val" style="color:#16a34a;">+${totalKredit} Poin</div></div>
         <div class="card-skor"><div class="card-title" style="color:#dc2626;">Total Pelanggaran (-)</div><div class="card-val" style="color:#dc2626;">-${totalPelanggaran} Poin</div></div>
         <div class="card-skor"><div class="card-title" style="color:#b45309;">Kehadiran Belajar</div><div class="card-val" style="color:#b45309;">${persentaseKehadiran}%</div></div>
         <div class="card-skor" style="background:#f0f5ff; border: 1px solid #bfdbfe;"><div class="card-title" style="color:#2563eb;">Sisa Poin Akhir</div><div class="card-val" style="color:#2563eb;">${sisaPoin} Poin</div></div>
       </div>
-
-      <p style="font-size: 11px; color:#475569; margin: -5px 0 15px 0; text-align:right;">
-        * Statistik Kesiswaan: Hari Kerja (Sekretaris): <b>${hariAktifBelajar}</b> hari | Hari Aktif Sekolah: <b>${hariAktifSekolah}</b> hari | Hadir: <b>${totalHadir}</b> | Izin-Sakit: <b>${izin+sakit}</b> | Alpa: <b style="color:#dc2626;">${alpa}</b>
-      </p>
-
       <h4>I. Catatan Pelanggaran Kedisiplinan (Poin Pengurang)</h4>
       <table class="data-table">
         <thead>
           <tr><th style="width:5%; text-align:center;">No</th><th style="width:15%;">Tanggal</th><th>Bentuk Pelanggaran</th><th>Keterangan Tambahan</th><th style="width:12%; text-align:right;">Bobot</th></tr>
         </thead>
-        <tbody>${riwayatPelanggaranHtml}</tbody>
+        <tbody>${riwayatPelanggaranPrint}</tbody>
       </table>
-
       <h4>II. Catatan Prestasi & Penghargaan Kompensasi (Poin Penambah)</h4>
       <table class="data-table">
         <thead>
           <tr><th style="width:5%; text-align:center;">No</th><th style="width:15%;">Tanggal</th><th>Nama Kegiatan / Prestasi</th><th>Deskripsi / Piagam</th><th style="width:12%; text-align:right;">Kredit</th></tr>
         </thead>
-        <tbody>${riwayatKreditHtml}</tbody>
+        <tbody>${riwayatKreditPrint}</tbody>
       </table>
-
       <div class="ttd-section">
         <div class="ttd-box">
           <p>Mengetahui,<br>Orang Tua / Wali Siswa</p>
@@ -2698,7 +2822,6 @@ function showModalPreviewKredit(siswaId) {
           <p style="border-bottom: 1px solid #000; font-weight: bold; margin:0; padding-bottom:2px;"></p>
           <p style="margin:2px 0 0 0; font-size:11px; color:#64748b;">Wali Murid</p>
         </div>
-        
         <div class="ttd-box">
           <p>Kayu Agung, ${new Date().toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}<br>Wali Kelas</p>
           <div class="ttd-space"></div>
@@ -2710,7 +2833,38 @@ function showModalPreviewKredit(siswaId) {
     </html>
   `;
 
-  // RENDERING MODAL UTAMA DI SCREEN APLIKASI
+  // 5. GENERATE TABEL DI SCREEN MODAL INTERAKSI (BISA DIHAPUS)
+  const rowsKreditModal = kredit.length === 0
+    ? `<tr><td colspan="5" class="p-3 text-center text-xs text-gray-400 italic">Belum ada riwayat kredit poin.</td></tr>`
+    : kredit.map((k, i) => `
+      <tr class="hover:bg-green-50/50 dark:hover:bg-green-950/20 text-xs">
+        <td class="p-2.5 text-center font-mono text-gray-500">${k.tanggal || '-'}</td>
+        <td class="p-2.5 font-semibold text-slate-800 dark:text-gray-200">${k.namaKredit || k.nama || '-'}</td>
+        <td class="p-2.5 text-gray-500 dark:text-gray-400">${k.deskripsi || '-'}</td>
+        <td class="p-2.5 text-center font-bold text-green-600 dark:text-green-400">+${k.poin}</td>
+        <td class="p-2.5 text-center">
+          <button onclick="hapusEntryKreditPoin('${k.id}', '${siswa.id}', 'kredit')" class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-md text-[11px] font-semibold transition-colors">
+            Hapus
+          </button>
+        </td>
+      </tr>`).join('');
+
+  const rowsPelanggaranModal = pelanggaran.length === 0
+    ? `<tr><td colspan="5" class="p-3 text-center text-xs text-gray-400 italic">Belum ada riwayat pelanggaran.</td></tr>`
+    : pelanggaran.map((p, i) => `
+      <tr class="hover:bg-red-50/50 dark:hover:bg-red-950/20 text-xs">
+        <td class="p-2.5 text-center font-mono text-gray-500">${p.tanggal || '-'}</td>
+        <td class="p-2.5 font-semibold text-red-600 dark:text-red-400">${p.namaPelanggaran || p.jenisPelanggaran || '-'}</td>
+        <td class="p-2.5 text-gray-500 dark:text-gray-400">${p.keterangan || p.deskripsi || '-'}</td>
+        <td class="p-2.5 text-center font-bold text-red-500">-${p.poin}</td>
+        <td class="p-2.5 text-center">
+          <button onclick="hapusEntryKreditPoin('${p.id}', '${siswa.id}', 'pelanggaran')" class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-md text-[11px] font-semibold transition-colors">
+            Hapus
+          </button>
+        </td>
+      </tr>`).join('');
+
+  // RENDERING MODAL UTAMA
   const modal = `
   <div id="modalPreviewKredit" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-4xl my-auto overflow-hidden border border-slate-100 dark:border-gray-700 transform transition-all text-slate-800 dark:text-gray-100">
@@ -2723,7 +2877,7 @@ function showModalPreviewKredit(siswaId) {
         <button onclick="document.getElementById('modalPreviewKredit').remove()" class="w-8 h-8 flex items-center justify-center text-2xl font-light rounded-full hover:bg-white/10 transition-colors">&times;</button>
       </div>
       
-      <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+      <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
         <div class="flex flex-col md:flex-row md:items-center justify-between border-b dark:border-gray-700 pb-4 gap-2">
           <div>
             <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md">Profil Siswa</span>
@@ -2755,6 +2909,55 @@ function showModalPreviewKredit(siswaId) {
             <div class="text-2xl font-black text-indigo-700 dark:text-indigo-400 mt-1">${sisaPoin}</div>
           </div>
         </div>
+
+        <!-- RINCIAN KREDIT POIN (+) -->
+        <div class="space-y-2">
+          <h4 class="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center justify-between">
+            <span>Rincian Kredit Poin Penambah (+)</span>
+            <span class="text-[11px] font-normal text-gray-400">${kredit.length} Catatan</span>
+          </h4>
+          <div class="border border-slate-100 dark:border-gray-700 rounded-2xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 dark:bg-gray-700/50 text-slate-500 dark:text-gray-400 text-[11px] font-bold uppercase">
+                  <th class="p-2.5 text-center w-24">Tanggal</th>
+                  <th class="p-2.5">Nama Poin / Kegiatan</th>
+                  <th class="p-2.5">Keterangan</th>
+                  <th class="p-2.5 text-center w-16">Poin</th>
+                  <th class="p-2.5 text-center w-20">Aksi</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                ${rowsKreditModal}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RINCIAN PELANGGARAN (-) -->
+        <div class="space-y-2">
+          <h4 class="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center justify-between">
+            <span>Rincian Catatan Pelanggaran (-)</span>
+            <span class="text-[11px] font-normal text-gray-400">${pelanggaran.length} Catatan</span>
+          </h4>
+          <div class="border border-slate-100 dark:border-gray-700 rounded-2xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 dark:bg-gray-700/50 text-slate-500 dark:text-gray-400 text-[11px] font-bold uppercase">
+                  <th class="p-2.5 text-center w-24">Tanggal</th>
+                  <th class="p-2.5">Bentuk Pelanggaran</th>
+                  <th class="p-2.5">Keterangan</th>
+                  <th class="p-2.5 text-center w-16">Poin</th>
+                  <th class="p-2.5 text-center w-20">Aksi</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                ${rowsPelanggaranModal}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
       <div class="bg-slate-50 dark:bg-gray-800/50 px-6 py-4 border-t dark:border-gray-700 flex justify-end gap-3">
@@ -2770,6 +2973,73 @@ function showModalPreviewKredit(siswaId) {
   </div>`;
 
   document.body.insertAdjacentHTML('beforeend', modal);
+}
+
+// =========================================================================
+// FUNGSI HAPUS ENTRY KREDIT POIN / PELANGGARAN (SINKRON FIREBASE & MEMORI)
+// =========================================================================
+function hapusEntryKreditPoin(entryId, siswaId, tipe) {
+  if (!confirm("Apakah Anda yakin ingin menghapus data rincian poin ini secara permanen?")) return;
+
+  // 1. FILTER DATA DI MEMORI LOKAL (RAM)
+  if (tipe === 'kredit') {
+    if (Array.isArray(DB.kreditPoin)) {
+      DB.kreditPoin = DB.kreditPoin.filter(item => {
+        const idItem = item.id || item._id;
+        return String(idItem) !== String(entryId);
+      });
+    }
+  } else if (tipe === 'pelanggaran') {
+    if (Array.isArray(DB.pelanggaran)) {
+      DB.pelanggaran = DB.pelanggaran.filter(item => {
+        const idItem = item.id || item._id;
+        return String(idItem) !== String(entryId);
+      });
+    }
+  }
+
+  // 2. SIMPAN / KIRIM PERUBAHAN KE FIREBASE CLOUD (SOLUSI UTAMA)
+  let targetDb = null;
+  if (typeof database !== 'undefined') {
+    targetDb = database;
+  } else if (window.firebase && window.firebase.apps && window.firebase.apps.length > 0) {
+    targetDb = window.firebase.apps[0].database();
+  }
+
+  if (targetDb) {
+    // Tentukan path mana yang akan diupdate di Firebase
+    const pathTarget = (tipe === 'kredit') ? 'kesiswaan_cloud/kreditPoin' : 'kesiswaan_cloud/pelanggaran';
+    const dataTerbaru = (tipe === 'kredit') ? DB.kreditPoin : DB.pelanggaran;
+
+    // Tulis ulang array terbaru ke Firebase agar data yang terhapus benar-benar hilang dari Cloud
+    targetDb.ref(pathTarget).set(dataTerbaru)
+      .then(() => {
+        console.log("Berhasil menghapus data dari Firebase!");
+      })
+      .catch((error) => {
+        console.error("Gagal memperbarui Firebase:", error);
+      });
+  }
+
+  // 3. BACKUP KE LOCALSTORAGE
+  try {
+    localStorage.setItem('DB', JSON.stringify(DB));
+  } catch (e) {
+    console.error("Gagal simpan localStorage", e);
+  }
+
+  // 4. NOTIFIKASI & REFRESH TAMPILAN
+  if (typeof showToast === 'function') {
+    showToast('Data berhasil dihapus permanen dari Cloud & Lokal', 'success');
+  }
+
+  // Reload Modal & Rekap Poin
+  if (typeof showModalPreviewKredit === 'function') {
+    showModalPreviewKredit(siswaId);
+  }
+  if (typeof renderRekapKreditPoin === 'function') {
+    renderRekapKreditPoin();
+  }
 }
 
 
@@ -5499,13 +5769,20 @@ function simpanPelanggaran() {
       document.getElementById('bodyGuruPel').innerHTML = data.map(d => `<tr class="border-t dark:border-gray-700/50"><td class="py-3 px-4">${d.nama}</td><td class="py-3 px-4">${d.nisn}</td><td class="py-3 px-4">${d.kelas}</td><td class="py-3 px-4">${d.tanggal}</td><td class="py-3 px-4">${d.jenis}</td><td class="py-3 px-4"><span class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold">${d.poin}</span></td></tr>`).join('') || '<tr><td colspan="6" class="py-8 text-center text-gray-400">Tidak ada data</td></tr>';
     }
 
-  //===== KREDIT POIN ======
+// ===== KREDIT POIN ======
 function renderInputKreditPoin() {
   const mc = document.getElementById('mainContent');
+  if (!mc) {
+    console.error("Elemen dengan id 'mainContent' tidak ditemukan!");
+    return;
+  }
+
+  // Pengaman jika currentUser belum terdefinisi
+  const user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : { name: 'Sistem/Admin', role: 'admin', kelasBinaan: '-' };
 
   // Indikator teks status hak akses di atas form
-  const infoAkses = currentUser.role === 'walas' 
-    ? `<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-md font-semibold">Mode Walas: Kelas ${currentUser.kelasBinaan || '-'}</span>`
+  const infoAkses = user.role === 'walas' 
+    ? `<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-md font-semibold">Mode Walas: Kelas ${user.kelasBinaan || '-'}</span>`
     : `<span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 rounded-md font-semibold">Mode Admin: Akses Semua Kelas</span>`;
 
   mc.innerHTML = `
@@ -5513,24 +5790,24 @@ function renderInputKreditPoin() {
     <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
 
       <div class="flex justify-between items-center mb-4">
-        <h3 class="font-semibold">Input Kredit Poin Siswa</h3>
+        <h3 class="font-semibold text-gray-800 dark:text-white">Input Kredit Poin Siswa</h3>
         ${infoAkses}
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         <div class="relative">
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Nama Siswa
           </label>
 
           <input
             type="text"
             id="kpCariSiswa"
-            placeholder="${currentUser.role === 'walas' ? '🔍 Cari anak wali Anda...' : '🔍 Ketik nama atau kelas siswa...'}"
+            placeholder="${user.role === 'walas' ? '🔍 Cari anak wali Anda...' : '🔍 Ketik nama atau kelas siswa...'}"
             oninput="filterKPSiswa()"
             onfocus="bukaDropdownKPSiswa()"
-            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"
+            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm text-gray-800 dark:text-white"
             autocomplete="off"
           >
 
@@ -5543,32 +5820,32 @@ function renderInputKreditPoin() {
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             NISN
           </label>
-          <input id="kpNISN" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm">
+          <input id="kpNISN" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm text-gray-800 dark:text-white">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Kelas
           </label>
-          <input id="kpKelas" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm">
+          <input id="kpKelas" readonly class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm text-gray-800 dark:text-white">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Tanggal
           </label>
           <input
             id="kpTanggal"
             type="date"
             value="${new Date().toISOString().split('T')[0]}"
-            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm">
+            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm text-gray-800 dark:text-white">
         </div>
 
         <div class="relative">
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Kredit Poin
           </label>
 
@@ -5578,7 +5855,7 @@ function renderInputKreditPoin() {
             placeholder="🔍 Cari jenis kredit poin..."
             oninput="filterKreditPoin()"
             onfocus="bukaDropdownKreditPoin()"
-            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"
+            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm text-gray-800 dark:text-white"
             autocomplete="off"
           >
 
@@ -5591,18 +5868,18 @@ function renderInputKreditPoin() {
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Poin
           </label>
 
           <input
             id="kpPoin"
             readonly
-            class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm">
+            class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm text-gray-800 dark:text-white">
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Deskripsi Kegiatan
           </label>
 
@@ -5610,26 +5887,26 @@ function renderInputKreditPoin() {
             id="kpDeskripsi"
             rows="3"
             placeholder="Contoh: Juara 1 Lomba Bulu Tangkis Tingkat Provinsi"
-            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm"></textarea>
+            class="w-full px-3 py-2 border rounded-xl dark:bg-gray-700 dark:border-gray-600 text-sm text-gray-800 dark:text-white"></textarea>
         </div>
 
         <div>
-          <label class="flex items-center gap-2 text-sm mt-2">
+          <label class="flex items-center gap-2 text-sm mt-2 text-gray-700 dark:text-gray-300">
             <input type="checkbox" id="kpChecklist">
             <span>Saya menyatakan data ini benar</span>
           </label>
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">
+          <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
             Penginput
           </label>
 
           <input
             readonly
-            value="${currentUser.name}"
+            value="${user.name || '-'}"
             id="kpPenginput"
-            class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm">
+            class="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-gray-600 text-sm text-gray-800 dark:text-white">
         </div>
 
       </div>
@@ -5653,7 +5930,7 @@ function renderInputKreditPoin() {
 }
 
 // ====================================================
-// 🔥 PERBAIKAN: AUTOCOMPLETE SISWA DENGAN FILTER AKUN WALAS
+// AUTOCOMPLETE SISWA DENGAN FILTER AKUN WALAS
 // ====================================================
 
 function bukaDropdownKPSiswa() {
@@ -5670,17 +5947,20 @@ function bukaDropdownKPSiswa() {
 function filterKPSiswa() {
   const kataKunci = document.getElementById('kpCariSiswa').value.toLowerCase().trim();
   const dropdown = document.getElementById('dropdownKPSiswa');
+  if (!dropdown) return;
 
-  // 1. Ambil data master siswa awal
+  const user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+
+  // Inisialisasi DB jika belum ada
+  if (typeof DB === 'undefined') window.DB = { siswa: [], kreditPoinMaster: [] };
+
   let dataSiswaMentah = DB.siswa || [];
 
-  // 2. JIKA ROLE ADALAH WALAS, KUNCI LIST-NYA SEJAK AWAL
-  if (currentUser.role === 'walas') {
-    const kelasBinaanSaya = (currentUser.kelasBinaan || '').toUpperCase();
+  if (user.role === 'walas') {
+    const kelasBinaanSaya = (user.kelasBinaan || '').toUpperCase();
     dataSiswaMentah = dataSiswaMentah.filter(s => (s.kelas || '').toUpperCase() === kelasBinaanSaya);
   }
 
-  // 3. Jalankan penyaringan teks pencarian dari data yang sudah dikunci tadi
   const hasilFilter = dataSiswaMentah.filter(s =>
     (s.nama || '').toLowerCase().includes(kataKunci) ||
     (s.kelas || '').toLowerCase().includes(kataKunci)
@@ -5702,7 +5982,7 @@ function filterKPSiswa() {
     >
       <span class="font-medium text-gray-900 dark:text-white">${s.nama}</span>
       <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md font-mono">
-        ${s.kelas}
+        ${s.kelas || '-'}
       </span>
     </div>
   `).join('');
@@ -5713,9 +5993,9 @@ function pilihKPSiswa(id, nama, kelas) {
   document.getElementById('kpSiswa').value = id;
   document.getElementById('dropdownKPSiswa').classList.add('hidden');
 
-  const s = DB.siswa.find(x => x.id == id);
-  document.getElementById('kpNISN').value = s ? s.nisn : '';
-  document.getElementById('kpKelas').value = s ? s.kelas : '';
+  const s = (DB.siswa || []).find(x => String(x.id) === String(id));
+  document.getElementById('kpNISN').value = s ? (s.nisn || '-') : '-';
+  document.getElementById('kpKelas').value = s ? (s.kelas || '-') : '-';
 }
 
 function bukaDropdownKreditPoin() {
@@ -5731,6 +6011,9 @@ function bukaDropdownKreditPoin() {
 function filterKreditPoin() {
   const keyword = document.getElementById('kpCariJenis').value.toLowerCase().trim();
   const dropdown = document.getElementById('dropdownKreditPoin');
+  if (!dropdown) return;
+
+  if (typeof DB === 'undefined') window.DB = { siswa: [], kreditPoinMaster: [] };
 
   const hasil = (DB.kreditPoinMaster || []).filter(k =>
     (k.nama || '').toLowerCase().includes(keyword) ||
@@ -5748,15 +6031,15 @@ function filterKreditPoin() {
 
   dropdown.innerHTML = hasil.map(k => `
     <div
-      onclick="pilihKreditPoin('${k.kode}','${k.nama}',${k.poin})"
+      onclick="pilihKreditPoin('${k.kode || k.id}','${k.nama}',${k.poin || 0})"
       class="p-3 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center"
     >
       <div>
         <div class="font-medium text-gray-900 dark:text-white text-sm">${k.nama}</div>
-        <div class="text-xs text-gray-400">${k.kode}</div>
+        <div class="text-xs text-gray-400">${k.kode || '-'}</div>
       </div>
       <span class="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 rounded text-xs font-bold">
-        +${k.poin}
+        +${k.poin || 0}
       </span>
     </div>
   `).join('');
@@ -5769,9 +6052,7 @@ function pilihKreditPoin(kode, nama, poin) {
   document.getElementById('dropdownKreditPoin').classList.add('hidden');
 }
 
-// ====================================================
-// 🔥 PERBAIKAN: KEAMANAN GANDA SAAT PROSES SIMPAN DATA
-// ====================================================
+// SIMPAN DATA
 async function simpanKreditPoin() {
   const siswaId = document.getElementById('kpSiswa').value;
   const kreditId = document.getElementById('kpJenis').value;
@@ -5780,41 +6061,49 @@ async function simpanKreditPoin() {
   const deskripsi = document.getElementById('kpDeskripsi').value.trim();
   const checklist = document.getElementById('kpChecklist').checked;
 
+  const user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : { name: 'Admin', role: 'admin' };
+
   if (!siswaId) {
-    showToast('Pilih siswa terlebih dahulu', 'error');
+    if (typeof showToast === 'function') showToast('Pilih siswa terlebih dahulu', 'error');
+    else alert('Pilih siswa terlebih dahulu');
     return;
   }
 
   if (!kreditId) {
-    showToast('Pilih kredit poin terlebih dahulu', 'error');
+    if (typeof showToast === 'function') showToast('Pilih kredit poin terlebih dahulu', 'error');
+    else alert('Pilih kredit poin terlebih dahulu');
     return;
   }
 
   if (!deskripsi) {
-    showToast('Deskripsi kegiatan wajib diisi', 'error');
+    if (typeof showToast === 'function') showToast('Deskripsi kegiatan wajib diisi', 'error');
+    else alert('Deskripsi kegiatan wajib diisi');
     return;
   }
 
   if (!checklist) {
-    showToast('Centang pernyataan penginput', 'error');
+    if (typeof showToast === 'function') showToast('Centang pernyataan penginput', 'error');
+    else alert('Centang pernyataan penginput');
     return;
   }
 
-  const siswa = DB.siswa.find(s => String(s.id) === String(siswaId));
-  const kredit = DB.kreditPoinMaster.find(k =>
+  const siswa = (DB.siswa || []).find(s => String(s.id) === String(siswaId));
+  const kredit = (DB.kreditPoinMaster || []).find(k =>
     String(k.kode) === String(kreditId) || String(k.id) === String(kreditId)
   );
 
   if (!siswa || !kredit) {
-    showToast('Data siswa atau kredit poin tidak ditemukan', 'error');
+    if (typeof showToast === 'function') showToast('Data siswa atau kredit poin tidak ditemukan', 'error');
+    else alert('Data siswa atau kredit poin tidak ditemukan');
     return;
   }
 
-  // Proteksi Tambahan: Jika Walas mencoba menembak data siswa kelas lain, blokir langsung!
-  if (currentUser.role === 'walas') {
-    const kelasBinaanSaya = (currentUser.kelasBinaan || '').toUpperCase();
+  // Proteksi Akses Walas
+  if (user.role === 'walas') {
+    const kelasBinaanSaya = (user.kelasBinaan || '').toUpperCase();
     if ((siswa.kelas || '').toUpperCase() !== kelasBinaanSaya) {
-      showToast('Akses Ditolak! Anda tidak diizinkan memberi poin ke siswa kelas lain.', 'error');
+      if (typeof showToast === 'function') showToast('Akses Ditolak! Anda tidak diizinkan memberi poin ke siswa kelas lain.', 'error');
+      else alert('Akses Ditolak! Anda tidak diizinkan memberi poin ke siswa kelas lain.');
       return;
     }
   }
@@ -5830,21 +6119,33 @@ async function simpanKreditPoin() {
     poin: poin,
     deskripsi: deskripsi,
     tanggal: tanggal,
-    penginput: currentUser.name,
-    rolePenginput: currentUser.role
+    penginput: user.name,
+    rolePenginput: user.role
   };
 
-  if (!DB.kreditPoin) {
-    DB.kreditPoin = [];
-  }
-
+  if (!DB.kreditPoin) DB.kreditPoin = [];
   DB.kreditPoin.push(dataBaru);
 
-  // Jika di sistem Anda perlu memperbarui total poin siswa langsung di objek siswa:
+  // Update poin lokal
   siswa.poin = (siswa.poin || 0) + poin;
 
-  await simpanDataKeStorage("kreditPoin");
-  showToast('Kredit poin berhasil disimpan', 'success');
+  // 🔥 PERBAIKAN DENGAN TRY-CATCH UNTUK MENGATASI ERROR FIREBASE
+  try {
+    if (typeof simpanDataKeStorage === 'function') {
+      await simpanDataKeStorage("kreditPoin");
+    } else {
+      // Fallback simpan ke LocalStorage jika fungsi simpanDataKeStorage tidak ada
+      localStorage.setItem('kreditPoin', JSON.stringify(DB.kreditPoin));
+    }
+    if (typeof showToast === 'function') showToast('Kredit poin berhasil disimpan', 'success');
+  } catch (err) {
+    console.warn("Peringatan simpan online gagal, menyimpan ke LocalStorage lokal:", err);
+    // Simpan ke LocalStorage lokal agar data tidak hilang
+    localStorage.setItem('kreditPoin', JSON.stringify(DB.kreditPoin));
+    if (typeof showToast === 'function') showToast('Tersimpan di Lokal (Koneksi Firebase Belum Siap)', 'warning');
+  }
+
+  // Reset form setelah simpan
   renderInputKreditPoin();
 }
 
@@ -6988,7 +7289,7 @@ function unggahTataTertibMassal(event) {
   event.target.value = '';
 }
 
-  function renderKelolaKreditPoin() {
+function renderKelolaKreditPoin() {
   const mc = document.getElementById('mainContent');
 
   if (!DB.kreditPoinMaster) {
@@ -6997,98 +7298,194 @@ function unggahTataTertibMassal(event) {
 
   mc.innerHTML = `
   <div class="fade-in space-y-6 max-w-4xl mx-auto p-4">
-
     <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
 
-      <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
-        🏆 Kelola Kredit Poin Siswa
-      </h3>
-
-      <p class="text-xs text-gray-500 mb-6">
-        Unggah daftar kredit poin prestasi siswa melalui file CSV.
-      </p>
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h3 class="font-bold text-lg flex items-center gap-2">
+            🏆 Kelola Master Kredit Poin
+          </h3>
+          <p class="text-xs text-gray-500">
+            Tambah poin prestasi secara manual atau secara massal melalui CSV.
+          </p>
+        </div>
+        
+        <!-- Tombol Buka Modal Form Manual -->
+        <button 
+          onclick="bukaModalKreditPoin()"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1">
+          ➕ Tambah Manual
+        </button>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-
-        <div class="p-4 bg-blue-50 rounded-xl border">
-          <h4 class="font-bold text-sm mb-2">
-            1. Unduh Template
-          </h4>
-
+        <div class="p-4 bg-blue-50 dark:bg-gray-700 rounded-xl border border-blue-100 dark:border-gray-600">
+          <h4 class="font-bold text-sm mb-2">1. Unduh Template</h4>
           <button
             onclick="unduhTemplateKreditPoin()"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs">
-
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs">
             Unduh Template CSV
-
           </button>
         </div>
 
-        <div class="p-4 bg-green-50 rounded-xl border">
-
-          <h4 class="font-bold text-sm mb-2">
-            2. Unggah Kredit Poin
-          </h4>
-
-          <label class="px-4 py-2 bg-green-600 text-white rounded-lg text-xs cursor-pointer">
-
-            Pilih File
-
+        <div class="p-4 bg-green-50 dark:bg-gray-700 rounded-xl border border-green-100 dark:border-gray-600">
+          <h4 class="font-bold text-sm mb-2">2. Unggah Kredit Poin</h4>
+          <label class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs cursor-pointer inline-block">
+            Pilih File CSV
             <input
               type="file"
               accept=".csv"
               class="hidden"
               onchange="unggahKreditPoinMassal(event)">
-
           </label>
-
         </div>
-
       </div>
 
+      <!-- Tabel Data Master -->
       <div class="overflow-x-auto">
-
-        <table class="w-full text-sm">
-
-          <thead>
+        <table class="w-full text-sm text-left">
+          <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200">
             <tr>
               <th class="p-3">Kode</th>
               <th class="p-3">Nama Kredit Poin</th>
               <th class="p-3">Poin</th>
+              <th class="p-3 text-center">Aksi</th>
             </tr>
           </thead>
-
           <tbody>
-
             ${
               DB.kreditPoinMaster.length === 0
-              ?
-              `<tr>
-                <td colspan="3" class="text-center p-8 text-gray-400">
-                  Belum ada data
-                </td>
-              </tr>`
-              :
-              DB.kreditPoinMaster.map(k=>`
-                <tr>
-                  <td class="p-3">${k.kode}</td>
+              ? `<tr>
+                  <td colspan="4" class="text-center p-8 text-gray-400">
+                    Belum ada data master kredit poin
+                  </td>
+                </tr>`
+              : DB.kreditPoinMaster.map((k, index) => `
+                <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <td class="p-3 font-semibold">${k.kode}</td>
                   <td class="p-3">${k.nama}</td>
-                  <td class="p-3">${k.poin}</td>
+                  <td class="p-3 text-green-600 font-bold">+${k.poin}</td>
+                  <td class="p-3 text-center">
+                    <button 
+                      onclick="hapusKreditPoinMaster(${index})" 
+                      class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200">
+                      Hapus
+                    </button>
+                  </td>
                 </tr>
               `).join('')
             }
-
           </tbody>
-
         </table>
-
       </div>
 
     </div>
+  </div>
 
+  <!-- Modal Form Input Manual -->
+  <div id="modalFormKreditPoin" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl border border-gray-100 dark:border-gray-700">
+      <h3 class="font-bold text-lg mb-4 text-gray-800 dark:text-white">Tambah Master Kredit Poin</h3>
+      
+      <form onsubmit="simpanKreditPoinManual(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-300">Kode Poin</label>
+          <input type="text" id="manualKode" required placeholder="Contoh: KP004" 
+            class="w-full p-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-300">Nama Kredit / Prestasi</label>
+          <input type="text" id="manualNama" required placeholder="Contoh: Juara 2 Tingkat Kab/Kota" 
+            class="w-full p-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-300">Jumlah Poin</label>
+          <input type="number" id="manualPoin" min="1" required placeholder="Contoh: 15" 
+            class="w-full p-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3">
+          <button type="button" onclick="tutupModalKreditPoin()" 
+            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-semibold">
+            Batal
+          </button>
+          <button type="submit" 
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
+            Simpan Data
+          </button>
+        </div>
+      </form>
+    </div>
   </div>`;
 }
 
+// Buka Modal Pop-up
+function bukaModalKreditPoin() {
+  document.getElementById('modalFormKreditPoin').classList.remove('hidden');
+}
+
+// Tutup Modal Pop-up
+function tutupModalKreditPoin() {
+  document.getElementById('modalFormKreditPoin').classList.add('hidden');
+  document.getElementById('manualKode').value = '';
+  document.getElementById('manualNama').value = '';
+  document.getElementById('manualPoin').value = '';
+}
+
+// Simpan Data Input Manual
+function simpanKreditPoinManual(event) {
+  event.preventDefault();
+
+  const kode = document.getElementById('manualKode').value.trim();
+  const nama = document.getElementById('manualNama').value.trim();
+  const poin = parseInt(document.getElementById('manualPoin').value) || 0;
+
+  // Cek jika kode sudah pernah dipakai
+  const cekAda = DB.kreditPoinMaster.some(k => k.kode.toLowerCase() === kode.toLowerCase());
+  if (cekAda) {
+    if (typeof showToast === 'function') showToast('Kode kredit poin sudah ada!', 'error');
+    else alert('Kode kredit poin sudah ada!');
+    return;
+  }
+
+  // Tambahkan data baru ke memori DB
+  DB.kreditPoinMaster.push({
+    id: kode,
+    kode: kode,
+    nama: nama,
+    poin: poin
+  });
+
+  // Simpan ke LocalStorage
+  if (typeof simpanDataKeStorage === 'function') {
+    simpanDataKeStorage("kreditPoinMaster");
+  } else {
+    localStorage.setItem("kreditPoinMaster", JSON.stringify(DB.kreditPoinMaster));
+  }
+
+  tutupModalKreditPoin();
+  renderKelolaKreditPoin();
+
+  if (typeof showToast === 'function') showToast('Kredit poin berhasil ditambahkan', 'success');
+}
+
+// Hapus Master Kredit Poin
+function hapusKreditPoinMaster(index) {
+  if (confirm('Apakah Anda yakin ingin menghapus poin ini?')) {
+    DB.kreditPoinMaster.splice(index, 1);
+
+    if (typeof simpanDataKeStorage === 'function') {
+      simpanDataKeStorage("kreditPoinMaster");
+    } else {
+      localStorage.setItem("kreditPoinMaster", JSON.stringify(DB.kreditPoinMaster));
+    }
+
+    renderKelolaKreditPoin();
+    if (typeof showToast === 'function') showToast('Data berhasil dihapus', 'success');
+  }
+}
 
 function unduhTemplateKreditPoin() {
 
@@ -12238,37 +12635,6 @@ function renderHalamanStatistikKehadiran() {
 }
 
 
-// ==========================================
-// 2. FUNGSI LOGIKA OLAHDATA FIREBASE
-// ==========================================
-
-// A. TAMBAH JADWAL KE FIREBASE
-// A. TAMBAH JADWAL
-async function simpanDataKeStorage(key) {
-  try {
-    // 1. Simpan ke LocalStorage sebagai backup/cache lokal
-    if (DB && DB[key] !== undefined) {
-      localStorage.setItem(key, JSON.stringify(DB[key]));
-    }
-
-    // 2. Kirim/Sinkronkan ke Cloud Firebase jika FirebaseService tersedia
-    if (typeof FirebaseService !== 'undefined') {
-      if (key === 'jadwalKesiswaan' && typeof FirebaseService.simpanJadwalKesiswaan === 'function') {
-        await FirebaseService.simpanJadwalKesiswaan();
-      } else if (key === 'catatanKesiswaan' && typeof FirebaseService.simpanCatatanKesiswaan === 'function') {
-        await FirebaseService.simpanCatatanKesiswaan();
-      } else if (typeof FirebaseService.saveNode === 'function') {
-        // Fallback jika menggunakan handler generic saveNode
-        await FirebaseService.saveNode(key, DB[key]);
-      }
-    }
-
-    return true; // Mengembalikan true jika berhasil
-  } catch (error) {
-    console.error(`Gagal menyimpan data ${key}:`, error);
-    return false; // Mengembalikan false jika gagal (agar toast error muncul)
-  }
-}
 
 async function tambahJadwalKesiswaan(event) {
   if (event) event.preventDefault(); // Mencegah reload halaman
