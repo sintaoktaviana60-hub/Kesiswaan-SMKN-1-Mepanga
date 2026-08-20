@@ -19,7 +19,8 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
-  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <script>
@@ -10148,7 +10149,7 @@ function cekKeteranganLibur(tanggalString) {
     }
 
 // ===================================================================
-// 🟢 1. DATA ATURAN PENEBUSAN (Pastikan ini ada di luar fungsi)
+// 🟢 1. DATA ATURAN PENEBUSAN
 // ===================================================================
 const ATURAN_PENEBUSAN = [
   { id: "P01", nama: "Membersihkan Kelas", poin: 5 },
@@ -10159,7 +10160,7 @@ const ATURAN_PENEBUSAN = [
 ];
 
 // ===================================================================
-// 🟢 2. FUNGSI RENDER UTAMA & HTML MODAL
+// 🟢 2. FUNGSI RENDER UTAMA & HTML MODAL (DENGAN FIX SCROLL & BUTTON)
 // ===================================================================
 function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
   const mc = document.getElementById('mainContent');
@@ -10203,7 +10204,7 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       totalAbsen = (alpa * 3) + (izin * 1) + (sakit * 0.5);
     }
 
-    // 3. HITUNG POIN PENEBUSAN/REMISI (✅ FIX NAMING DB: mendukung penebusanPoin maupun penebusan_poin)
+    // 3. HITUNG POIN PENEBUSAN/REMISI
     const sourcePenebusan = DB.penebusanPoin || DB.penebusan_poin || [];
     const listPenebusanArray = Array.isArray(sourcePenebusan) 
       ? sourcePenebusan 
@@ -10411,8 +10412,9 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       </div>
     </div>
 
-    <div id="modalTindakanKesiswaan" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 w-full max-w-md transform transition-all">
+    <!-- MODAL TINDAKAN KESISWAAN -->
+    <div id="modalTindakanKesiswaan" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 w-full max-w-md my-auto">
         <h4 class="font-bold text-base mb-1 text-gray-950 dark:text-white">Form Penyelesaian Masalah</h4>
         <p class="text-xs text-gray-400 mb-4">Uraian pembinaan ini akan dicatat resmi ke dalam buku kendali kesiswaan.</p>
         <input type="hidden" id="mtSiswaId"><input type="hidden" id="mtLevelTeks">
@@ -10436,17 +10438,22 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
       </div>
     </div>
 
-    <div id="modalPenebusanPoinKesiswaan" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-100 dark:border-gray-700 transform transition-all">
-        <div class="flex items-center gap-3 border-b border-gray-100 dark:border-gray-700 pb-3 mb-4">
+    <!-- 🟢 MODAL PENEBUSAN POIN (SUDAH DI-FIX AGAR BISA DI-SCROLL & DIBATASI MAKSIMAL TINGGINYA) -->
+    <div id="modalPenebusanPoinKesiswaan" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6 overflow-y-auto">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-100 dark:border-gray-700 my-auto flex flex-col max-h-[90vh]">
+        
+        <!-- Header Modal (Statis) -->
+        <div class="flex items-center gap-3 border-b border-gray-100 dark:border-gray-700 pb-3 mb-4 shrink-0">
           <div class="p-2 bg-green-50 text-green-600 rounded-xl">🌱</div>
           <div>
             <h4 class="font-bold text-base text-gray-950 dark:text-white">Form Pemulihan & Penebusan Poin</h4>
             <p class="text-xs text-gray-400">Poin pemulihan akan langsung mengurangi beban pelanggaran aktif.</p>
           </div>
         </div>
-        <input type="hidden" id="mpSiswaId">
-        <div class="space-y-3.5 text-sm">
+
+        <!-- Body Form Modal (Dapat Di-scroll jika Konten Panjang) -->
+        <div class="overflow-y-auto pr-1 space-y-3.5 text-sm grow custom-scroll">
+          <input type="hidden" id="mpSiswaId">
           <div><label class="block font-semibold text-xs text-gray-500 mb-1">Nama Siswa</label><input id="mpNama" readonly class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 font-semibold text-xs text-gray-800 dark:text-gray-200"></div>
           <div><label class="block font-semibold text-xs text-gray-500 mb-1">Tanggal Penyelesaian</label><input type="date" id="mpTanggal" class="w-full px-3 py-2 border rounded-xl text-xs text-gray-900 dark:bg-gray-700 dark:text-white"></div>
           <div>
@@ -10464,19 +10471,20 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
             <input type="checkbox" id="mpKonfirmasi" class="mt-0.5 rounded border-gray-300 text-blue-600 cursor-pointer">
             <label for="mpKonfirmasi" class="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer">Konfirmasi Otoritas Pemeriksa</label>
           </div>
-        </div>
 
-        <!-- 🔴 WADAH RIWAYAT PENEBUSAN -->
-        <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-          <h5 class="font-bold text-xs text-gray-700 dark:text-gray-300 mb-2">Riwayat Pemulihan Siswa Ini:</h5>
-          <div id="mpListRiwayat" class="max-h-36 overflow-y-auto space-y-2 text-xs">
-            <!-- Diisi otomatis oleh JavaScript -->
+          <!-- WADAH RIWAYAT PENEBUSAN -->
+          <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <h5 class="font-bold text-xs text-gray-700 dark:text-gray-300 mb-2">Riwayat Pemulihan Siswa Ini:</h5>
+            <div id="mpListRiwayat" class="max-h-36 overflow-y-auto space-y-2 text-xs">
+              <!-- Diisi otomatis oleh JavaScript -->
+            </div>
           </div>
         </div>
 
-        <div class="mt-5 pt-3 border-t border-gray-100 dark:border-gray-700 flex gap-3 justify-end">
+        <!-- Footer Tombol Modal (Statis Selalu Kelihatan di Bawah) -->
+        <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex gap-3 justify-end shrink-0">
           <button onclick="tutupModalPenebusan()" class="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-xl text-xs font-medium cursor-pointer">Batal</button>
-          <button onclick="eksekusiSimpanPenebusanBaru()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold cursor-pointer">Simpan & Kurangi Poin</button>
+          <button onclick="eksekusiSimpanPenebusanBaru()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-md">Simpan & Kurangi Poin</button>
         </div>
       </div>
     </div>
@@ -10490,7 +10498,7 @@ function renderBimbinganKesiswaan(filterKelasWakasis = 'SEMUA'){
 }
 
 // ===================================================================
-// 🟢 FUNGSI LOGIKA MODAL & HAPUS
+// 🟢 3. FUNGSI LOGIKA MODAL & HANDLER DATA (TIDAK ADA DUPLIKASI)
 // ===================================================================
 
 function bukaModalPenebusan(idSiswa, nama) {
@@ -10516,7 +10524,6 @@ function renderRiwayatModalPenebusan(idSiswa) {
 
   const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
 
-  // 1. Ambil data penebusan (Mendukung penebusanPoin maupun penebusan_poin, Format Array maupun Object)
   let rawData = [];
   if (typeof DB !== 'undefined') {
     rawData = DB.penebusanPoin || DB.penebusan_poin || [];
@@ -10532,7 +10539,6 @@ function renderRiwayatModalPenebusan(idSiswa) {
     }));
   }
 
-  // 2. Filter berdasarkan idSiswa atau siswaId
   const listData = dataPenebusan.filter(p => {
     const targetId = p.idSiswa || p.siswaId;
     return String(targetId) === String(idSiswa);
@@ -10543,7 +10549,6 @@ function renderRiwayatModalPenebusan(idSiswa) {
     return;
   }
 
-  // 3. Render list riwayat
   container.innerHTML = listData.map(p => {
     const keyPenebusan = p.idPenebusan || p.id || '';
     const namaTindakan = p.tindakanMendidik || p.tindakan || p.namaTindakan || 'Pemulihan Poin';
@@ -10557,7 +10562,7 @@ function renderRiwayatModalPenebusan(idSiswa) {
           <div class="text-[10px] text-gray-400">📅 ${tanggal} | <span class="text-green-600 font-bold">+${poin} Poin</span></div>
         </div>
         ${userRole === 'admin' ? `
-          <button type="button" onclick="hapusPenebusanPoin('${keyPenebusan}', '${idSiswa}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold transition">
+          <button type="button" onclick="hapusPenebusanPoin('${keyPenebusan}', '${idSiswa}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer">
             🗑️ Hapus
           </button>
         ` : ''}
@@ -10566,44 +10571,53 @@ function renderRiwayatModalPenebusan(idSiswa) {
   }).join('');
 }
 
-async function hapusPenebusanPoin(idPenebusan, idSiswa) {
+// FUNGSI HAPUS TUNGGAL & AMAN
+async function hapusPenebusanPoin(idPenebusan, idSiswa = null) {
   const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
   if (userRole !== 'admin') {
-    alert('⚠️ Akses Ditolak! Hanya Admin yang dapat menghapus riwayat penebusan.');
+    alert('⚠️ Akses Ditolak! Hanya Admin yang berhak menghapus riwayat penebusan poin.');
+    return;
+  }
+
+  if (!idPenebusan) {
+    alert('ID data penebusan tidak ditemukan!');
     return;
   }
 
   if (!confirm('Apakah Anda yakin ingin menghapus data pemulihan poin ini? Poin siswa akan disesuaikan kembali.')) return;
 
   try {
-    // 1. Hapus dari Firebase Realtime Database
     if (typeof firebase !== 'undefined' && firebase.database) {
       await firebase.database().ref(`kesiswaan_cloud/penebusan_poin/${idPenebusan}`).remove();
     }
 
-    // 2. Hapus dari memori lokal (DB.penebusanPoin & DB.penebusan_poin)
     if (typeof DB !== 'undefined') {
       if (Array.isArray(DB.penebusanPoin)) {
         DB.penebusanPoin = DB.penebusanPoin.filter(p => (p.idPenebusan || p.id) !== idPenebusan);
         localStorage.setItem('sik_penebusan_poin', JSON.stringify(DB.penebusanPoin));
-      } else if (typeof DB.penebusanPoin === 'object') {
+      } else if (typeof DB.penebusanPoin === 'object' && DB.penebusanPoin !== null) {
         delete DB.penebusanPoin[idPenebusan];
       }
 
       if (Array.isArray(DB.penebusan_poin)) {
         DB.penebusan_poin = DB.penebusan_poin.filter(p => (p.idPenebusan || p.id) !== idPenebusan);
-      } else if (typeof DB.penebusan_poin === 'object') {
+      } else if (typeof DB.penebusan_poin === 'object' && DB.penebusan_poin !== null) {
         delete DB.penebusan_poin[idPenebusan];
       }
     }
 
-    alert('Data penebusan poin berhasil dihapus!');
+    if (typeof showToast === 'function') {
+      showToast('Data penebusan poin berhasil dihapus oleh Admin!', 'success');
+    } else {
+      alert('Data penebusan poin berhasil dihapus!');
+    }
 
-    // 3. Refresh tampilan
-    renderRiwayatModalPenebusan(idSiswa);
+    if (idSiswa) renderRiwayatModalPenebusan(idSiswa);
+    if (typeof renderPenebusanPoin === 'function') renderPenebusanPoin();
     if (typeof renderBimbinganKesiswaan === 'function') renderBimbinganKesiswaan();
 
   } catch (err) {
+    console.error('Gagal menghapus penebusan poin:', err);
     alert('Gagal menghapus data: ' + err.message);
   }
 }
@@ -10611,6 +10625,9 @@ async function hapusPenebusanPoin(idPenebusan, idSiswa) {
 function updatePoinOtomatis(idAturan) {
   const inputPoin = document.getElementById('mpPoin');
   const wrapperKustom = document.getElementById('mpWrapperKustom');
+  
+  const daftarAturan = typeof ATURAN_PENEBUSAN !== 'undefined' ? ATURAN_PENEBUSAN : [];
+
   if (idAturan === "KUSTOM") {
     wrapperKustom.classList.remove('hidden');
     inputPoin.readOnly = false; 
@@ -10618,7 +10635,7 @@ function updatePoinOtomatis(idAturan) {
   } else if (idAturan !== "") {
     wrapperKustom.classList.add('hidden');
     inputPoin.readOnly = true; 
-    const aturan = ATURAN_PENEBUSAN.find(x => x.id === idAturan);
+    const aturan = daftarAturan.find(x => x.id === idAturan);
     inputPoin.value = aturan ? aturan.poin : 0;
   } else {
     wrapperKustom.classList.add('hidden');
@@ -10632,74 +10649,50 @@ function eksekusiSimpanPenebusanBaru() {
   const idAturan = document.getElementById('mpSelectAturan').value;
   const poinPemulihan = Number(document.getElementById('mpPoin').value);
   const tanggal = document.getElementById('mpTanggal').value;
+  const catatan = document.getElementById('mpCatatan').value;
   const konfirmasiChecked = document.getElementById('mpKonfirmasi').checked;
 
   if (!idAturan || !poinPemulihan || !tanggal) { alert("Data belum lengkap!"); return; }
   if (!konfirmasiChecked) { alert("Centang kotak konfirmasi!"); return; }
 
-  let teksTindakan = idAturan === "KUSTOM" ? document.getElementById('mpTindakanKustom').value.trim() : ATURAN_PENEBUSAN.find(x => x.id === idAturan).nama;
+  const daftarAturan = typeof ATURAN_PENEBUSAN !== 'undefined' ? ATURAN_PENEBUSAN : [];
+  let teksTindakan = "";
 
-  const refPenebusan = firebase.database().ref("kesiswaan_cloud/penebusan_poin").push();
-  refPenebusan.set({
-    idPenebusan: refPenebusan.key, siswaId: siswaId, namaSiswa: namaSiswa,
-    poinPemulihan: poinPemulihan, tindakanMendidik: teksTindakan,
-    tanggalPemulihan: tanggal, waktuPencatatan: new Date().toLocaleString('id-ID')
-  }, (error) => {
-    if (error) alert("Gagal!"); else { alert("Sukses!"); tutupModalPenebusan(); }
-  });
+  if (idAturan === "KUSTOM") {
+    teksTindakan = document.getElementById('mpTindakanKustom').value.trim();
+    if (!teksTindakan) { alert("Masukkan jenis tindakan kustom!"); return; }
+  } else {
+    const aturan = daftarAturan.find(x => x.id === idAturan);
+    teksTindakan = aturan ? aturan.nama : "Pemulihan Poin";
+  }
+
+  if (typeof firebase !== 'undefined' && firebase.database) {
+    const refPenebusan = firebase.database().ref("kesiswaan_cloud/penebusan_poin").push();
+    refPenebusan.set({
+      idPenebusan: refPenebusan.key, 
+      siswaId: siswaId, 
+      namaSiswa: namaSiswa,
+      poinPemulihan: poinPemulihan, 
+      tindakanMendidik: teksTindakan,
+      catatan: catatan,
+      tanggalPemulihan: tanggal, 
+      waktuPencatatan: new Date().toLocaleString('id-ID')
+    }, (error) => {
+      if (error) {
+        alert("Gagal menyimpan data!");
+      } else {
+        alert("Sukses!"); 
+        tutupModalPenebusan();
+        if (typeof renderBimbinganKesiswaan === 'function') renderBimbinganKesiswaan();
+      }
+    });
+  } else {
+    alert("Koneksi Database tidak tersedia!");
+  }
 }
 
 function tutupModalPenebusan() {
   document.getElementById('modalPenebusanPoinKesiswaan').classList.add('hidden');
-}
-
-// D. Fungsi Hapus Penebusan Poin (KHUSUS ADMIN)
-async function hapusPenebusanPoin(idPenebusan) {
-  // 1. Validasi Hak Akses Admin
-  const userRole = typeof currentUser !== 'undefined' && currentUser.role ? currentUser.role.toLowerCase() : '';
-  
-  if (userRole !== 'admin') {
-    alert('⚠️ Akses Ditolak! Hanya Admin yang berhak menghapus riwayat penebusan poin.');
-    return;
-  }
-
-  if (!idPenebusan) {
-    alert('ID data penebusan tidak ditemukan!');
-    return;
-  }
-
-  // 2. Konfirmasi Tindakan
-  const konfirmasi = confirm("Apakah Anda yakin ingin menghapus data penebusan poin ini? Data yang dihapus tidak dapat dikembalikan.");
-  if (!konfirmasi) return;
-
-  try {
-    // 3. Hapus Data dari Firebase Cloud
-    await firebase.database().ref(`kesiswaan_cloud/penebusan_poin/${idPenebusan}`).remove();
-
-    // 4. Update Memory Local (DB) jika ada
-    if (typeof DB !== 'undefined' && DB.penebusanPoin) {
-      DB.penebusanPoin = DB.penebusanPoin.filter(p => p.idPenebusan !== idPenebusan);
-      localStorage.setItem('sik_penebusan_poin', JSON.stringify(DB.penebusanPoin));
-    }
-
-    // 5. Umpan Balik (Toast / Alert)
-    if (typeof showToast === 'function') {
-      showToast('Data penebusan poin berhasil dihapus oleh Admin!', 'success');
-    } else {
-      alert('Sukses! Data penebusan poin berhasil dihapus.');
-    }
-
-    // 6. Re-render UI Tabel Penebusan / Bimbingan
-    if (typeof renderPenebusanPoin === 'function') {
-      renderPenebusanPoin();
-    } else if (typeof renderBimbinganKesiswaan === 'function') {
-      renderBimbinganKesiswaan();
-    }
-
-  } catch (err) {
-    console.error('Gagal menghapus penebusan poin:', err);
-    alert('Terjadi kesalahan saat menghapus data: ' + err.message);
-  }
 }
 
 // ===================================================================
@@ -16560,8 +16553,8 @@ function renderDataIndukSiswa() {
         </div>
       </div>
 
-      <!-- Filter Pencarian & Kelas -->
-      <div class="flex flex-wrap gap-3 mb-6">
+      <!-- Filter Pencarian, Kelas & Tombol Download ZIP -->
+      <div class="flex flex-wrap items-center gap-3 mb-6">
         <input 
           type="text" 
           id="searchInduk" 
@@ -16585,6 +16578,15 @@ function renderDataIndukSiswa() {
             ${(DB.kelas || []).map(k => `<option value="${k}">${k}</option>`).join('')}
           </select>
         `}
+
+        <!-- 🟢 POSISI TOMBOL DOWNLOAD ZIP DI SINI -->
+        <button 
+          id="btnDownloadZip"
+          onclick="downloadFotoSiswaZip()" 
+          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-sm cursor-pointer whitespace-nowrap"
+        >
+          <i data-lucide="download" class="w-4 h-4"></i> Download Foto ZIP
+        </button>
       </div>
 
       <!-- Tabel Daftar Siswa -->
@@ -16610,6 +16612,71 @@ function renderDataIndukSiswa() {
   `;
 
   filterDataIndukSiswa();
+}
+
+async function downloadFotoSiswaZip() {
+  if (typeof JSZip === 'undefined' || typeof saveAs === 'undefined') {
+    alert("Pustaka JSZip atau FileSaver belum dimuat!");
+    return;
+  }
+
+  const zip = new JSZip();
+  const folderFoto = zip.folder("Foto_Buku_Induk");
+  const isSekretaris = currentUser && (currentUser.role === 'sekretaris' || currentUser.role === 'sekre');
+  const myKelas = currentUser ? (currentUser.kelas || '') : '';
+  const kelas = isSekretaris ? myKelas : (document.getElementById('filterKelasInduk')?.value || '');
+
+  let list = [...(DB.siswa || [])];
+  if (kelas) {
+    list = list.filter(s => String(s.kelas || '').trim().toLowerCase() === kelas.trim().toLowerCase());
+  }
+
+  let count = 0;
+  const btn = document.getElementById('btnDownloadZip');
+  if (btn) btn.innerText = "⏳ Memproses...";
+
+  for (const s of list) {
+    const kData = (DB.kelengkapanData || []).find(k => String(k.siswaId) === String(s.id)) || {};
+    const foto = kData.foto || s.pasFoto || '';
+
+    if (foto) {
+      try {
+        let blob;
+        if (foto.startsWith('data:image')) {
+          // Tangani format Base64
+          const arr = foto.split(',');
+          const mime = arr[0].match(/:(.*?);/)[1];
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) u8arr[n] = bstr.charCodeAt(n);
+          blob = new Blob([u8arr], { type: mime });
+        } else {
+          // Tangani format URL
+          const response = await fetch(foto);
+          blob = await response.blob();
+        }
+
+        const cleanNama = (s.nama || 'Siswa').replace(/[^a-zA-Z0-9]/g, '_');
+        const ext = blob.type.split('/')[1] || 'jpg';
+        folderFoto.file(`${s.nisn || s.id}_${cleanNama}.${ext}`, blob);
+        count++;
+      } catch (err) {
+        console.error(`Gagal mengunduh foto ${s.nama}:`, err);
+      }
+    }
+  }
+
+  if (count === 0) {
+    alert("Tidak ada foto siswa yang tersedia untuk diunduh!");
+    if (btn) btn.innerHTML = '<i data-lucide="download" class="w-3.5 h-3.5"></i> Download Foto ZIP';
+    return;
+  }
+
+  zip.generateAsync({ type: "blob" }).then(function (content) {
+    saveAs(content, `Foto_Siswa_${kelas || 'Semua'}.zip`);
+    if (btn) btn.innerHTML = '<i data-lucide="download" class="w-3.5 h-3.5"></i> Download Foto ZIP';
+  });
 }
 
 function filterDataIndukSiswa() {
