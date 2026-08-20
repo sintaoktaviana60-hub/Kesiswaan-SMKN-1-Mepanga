@@ -960,10 +960,22 @@ function handleLogin() {
       document.getElementById('loginError').classList.add('hidden');
     }
 
-    function checkSession() {
-      const s = localStorage.getItem('sik_session');
-      if (s) { currentUser = JSON.parse(s); showApp(); }
-    };
+  function checkSession() {
+  const s = localStorage.getItem('sik_session');
+  if (s) {
+    const storedUser = JSON.parse(s);
+    // Cek ulang apakah username dan sandi di sesi masih cocok dengan data terbaru di DB
+    const validUser = DB.users.find(x => x.username === storedUser.username && x.password === storedUser.password);
+    
+    if (validUser) {
+      currentUser = validUser; 
+      showApp(); 
+    } else {
+      // Jika sandi sudah diubah, hapus paksa sesi lama dari browser mereka (Force Logout)
+      localStorage.removeItem('sik_session');
+    }
+  }
+}
 
     // ===== APP INIT =====
     function showApp() {
