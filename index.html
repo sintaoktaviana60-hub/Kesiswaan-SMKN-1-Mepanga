@@ -11101,18 +11101,20 @@ function cetakSuratTindakan(idSiswa, totalPoin) {
 
   const nomorSuratFinal = inputNomorSurat.trim() || nomorDefault;
 
- // --- AMBIL DATA DARI DB.identitas ---
-const identitas = DB.identitas || {};
-const namaSekolah = identitas.namaSekolah || 'SMK NEGERI 1 MEPANGA';
-const alamatSekolah = identitas.alamat || 'Jl. Nusantara No. 116, Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong';
-const namaKasek = identitas.kasek || identitas.kepalaSekolah || 'Joko Sarwono, S.Pd.';
-const nipKasek = identitas.nipKasek || identitas.nipKepalaSekolah || '196610161991031010';
+  // --- AMBIL DATA DARI DB.identitas ---
+  const identitas = DB.identitas || {};
+  const namaSekolah = identitas.namaSekolah || 'SMK NEGERI 1 MEPANGA';
+  const alamatSekolah = identitas.alamat || 'Jl. Nusantara No. 116, Kayu Agung, Kec. Mepanga, Kab. Parigi Moutong';
+  
+  // Data Wakasek Kesiswaan
+  const namaWakasek = identitas.wakasekKesiswaan || identitas.wakasek || 'Sinta Dwi Oktaviana, S.Pd.';
+  const nipWakasek = identitas.nipWakasek || identitas.nipWakasekKesiswaan || '199810262022212002'
 
-// Ambil Logo dari DB.identitas
-const logoProvinsi = identitas.logoProvinsi || 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_Central_Sulawesi.svg';
-const logoSekolah = identitas.logoSekolah || identitas.logo || '';
+  // Ambil Logo dari DB.identitas
+  const logoProvinsi = identitas.logoProvinsi || 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_Central_Sulawesi.svg';
+  const logoSekolah = identitas.logoSekolah || identitas.logo || '';
 
-const htmlSurat = `
+  const htmlSurat = `
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -11243,17 +11245,17 @@ const htmlSurat = `
 
     <p class="paragraf">Demikian surat ini kami sampaikan. Atas perhatian dan kerja sama Bapak/Ibu demi kebaikan pendidikan putra/putri kita, kami ucapkan terima kasih.</p>
 
-    <!-- BLOK TANDA TANGAN (TANPA FOTO TTD) -->
+    <!-- BLOK TANDA TANGAN (WAKASEK KESISWAAN) -->
     <div class="ttd-box">
       <div class="ttd">
         <p style="margin: 0;">Kayu Agung, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-        <p style="margin: 2px 0 0 0;">Kepala Sekolah<br>${namaSekolah}</p>
+        <p style="margin: 2px 0 0 0;">Wakasek Kesiswaan,</p>
         
         <!-- Space kosong untuk tanda tangan basah -->
         <div style="height: 65px;"></div>
 
-        <p style="font-weight: bold; text-decoration: underline; margin: 0;">${namaKasek}</p>
-        <p style="font-size: 9pt; color: #333; margin: 2px 0 0 0;">NIP. ${nipKasek || '.........................'}</p>
+        <p style="font-weight: bold; text-decoration: underline; margin: 0;">${namaWakasek}</p>
+        <p style="font-size: 9pt; color: #333; margin: 2px 0 0 0;">NIP. ${nipWakasek}</p>
       </div>
     </div>
   </div>
@@ -15997,9 +15999,6 @@ function aksiBukaJendelaCetakMassal(filterKelas = "SEMUA") {
       <div class="baris-kartu">
         <!-- BINGKAI DEPAN (KIRI) -->
         <div class="bingkai-kartu">
-            <div class="garis-potong-kiri"></div>
-            <div class="garis-potong-bawah"></div>
-
             <div class="kartu-id">
                 <img src="${logoSekolahBase64}" class="watermark-logo" style="position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%); width: 32mm; height: 32mm; opacity: 0.12; z-index: 1; pointer-events: none; object-fit: contain;">
                 
@@ -16212,28 +16211,6 @@ body {
     border: 0.5px solid #cbd5e1;
     background: #ffffff;
     flex-shrink: 0;
-}
-
-.garis-potong-kiri {
-    position: absolute;
-    left: 7mm;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 0.5cm;
-    background-color: #dc2626;
-    z-index: 50;
-}
-
-.garis-potong-bawah {
-    position: absolute;
-    bottom: 2.7mm;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0.5cm;
-    height: 1px;
-    background-color: #dc2626;
-    z-index: 50;
 }
 
 .kartu-id {
